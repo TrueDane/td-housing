@@ -1,7 +1,7 @@
 local LegacyRegistration = TDHousing and TDHousing.LegacyRegistration
 
 if not LegacyRegistration then
-    return
+	return
 end
 
 RegisterNetEvent = LegacyRegistration.registerNetEvent

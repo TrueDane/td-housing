@@ -1,3 +1,3 @@
 Config.Wardrobe = {
-    provider = 'qb-clothing',
+	provider = "qb-clothing",
 }
