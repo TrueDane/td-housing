@@ -75,3 +75,18 @@ function PropertyRepository.UpdateFurniture(propertyId, furnitures)
 		}
 	)
 end
+
+function PropertyRepository.UpdateOwner(propertyId, identifier)
+	return MySQL.update.await(
+		[[
+        UPDATE properties
+        SET owner_citizenid = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE property_id = ?
+    ]],
+		{
+			identifier,
+			propertyId,
+		}
+	)
+end
