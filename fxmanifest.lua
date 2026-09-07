@@ -38,11 +38,14 @@ client_scripts {
 
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
+    'server/legacy_registration_guard.lua',
     'server/sv_property.lua',
+    'server/legacy_registration_restore.lua',
     'server/repositories/property_repository.lua',
     'server/services/property_capability_service.lua',
     'server/services/legacy_guard_service.lua',
     'server/modules/property_capabilities.lua',
+    'server/modules/legacy_compatibility.lua',
     'server/server.lua',
     'server/migrate.lua',
 }
