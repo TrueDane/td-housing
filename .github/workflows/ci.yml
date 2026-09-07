@@ -23,6 +23,7 @@ jobs:
           args: >-
             --check
             fxmanifest.lua
+            config/shared.lua
             config/client.lua
             shared/property_capabilities.lua
             server/repositories/property_repository.lua
@@ -40,12 +41,13 @@ jobs:
 
       - name: Check migrated Lua syntax
         run: |
+          luac5.4 -p config/shared.lua
+          luac5.4 -p config/client.lua
           luac5.4 -p shared/property_capabilities.lua
           luac5.4 -p server/repositories/property_repository.lua
           luac5.4 -p server/services/property_capability_service.lua
           luac5.4 -p server/services/legacy_guard_service.lua
           luac5.4 -p server/modules/property_capabilities.lua
-          luac5.4 -p config/client.lua
           luac5.4 -p client/integrations/wardrobe.lua
           luac5.4 -p client/modules/property_capabilities.lua
           luac5.4 -p tests/property_capabilities.lua
