@@ -19,6 +19,7 @@ shared_scripts {
     '@td_bridge/init.lua',
     '@ox_lib/init.lua',
     'shared/config.lua',
+    'config/shared.lua',
     'shared/framework.lua',
     'shared/property_capabilities.lua',
 }
