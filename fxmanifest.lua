@@ -5,6 +5,7 @@ author("TrueDane Development")
 description("TrueDane 3.0 housing engine based on ps-housing")
 version("0.1.0-dev")
 repository("https://github.com/TrueDane/td-housing")
+td_repository("TrueDane/td-housing")
 
 ui_page("html/index.html")
 
