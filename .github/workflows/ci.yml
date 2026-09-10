@@ -29,9 +29,11 @@ jobs:
             server/legacy_registration_guard.lua
             server/legacy_registration_restore.lua
             server/repositories/property_repository.lua
+            server/services/ownership_service.lua
             server/services/property_capability_service.lua
             server/services/legacy_guard_service.lua
             server/modules/property_capabilities.lua
+            server/modules/public_api.lua
             server/modules/legacy_compatibility.lua
             client/integrations/wardrobe.lua
             client/modules/property_capabilities.lua
@@ -51,9 +53,11 @@ jobs:
           luac5.4 -p server/legacy_registration_guard.lua
           luac5.4 -p server/legacy_registration_restore.lua
           luac5.4 -p server/repositories/property_repository.lua
+          luac5.4 -p server/services/ownership_service.lua
           luac5.4 -p server/services/property_capability_service.lua
           luac5.4 -p server/services/legacy_guard_service.lua
           luac5.4 -p server/modules/property_capabilities.lua
+          luac5.4 -p server/modules/public_api.lua
           luac5.4 -p server/modules/legacy_compatibility.lua
           luac5.4 -p client/integrations/wardrobe.lua
           luac5.4 -p client/modules/property_capabilities.lua
