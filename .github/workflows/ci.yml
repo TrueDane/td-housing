@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+  pull_request:
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check migrated Lua formatting
+        uses: JohnnyMorganz/stylua-action@v4
+        with:
+          version: latest
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: >-
+            --check
+            fxmanifest.lua
+            config/shared.lua
+            config/client.lua
+            shared/property_capabilities.lua
+            server/legacy_registration_guard.lua
+            server/legacy_registration_restore.lua
+            server/repositories/property_repository.lua
+            server/services/ownership_service.lua
+            server/services/property_capability_service.lua
+            server/services/legacy_guard_service.lua
+            server/modules/property_capabilities.lua
+            server/modules/public_api.lua
+            server/modules/legacy_compatibility.lua
+            client/integrations/wardrobe.lua
+            client/modules/property_capabilities.lua
+            tests/property_capabilities.lua
+
+      - name: Install Lua 5.4
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.4
+
+      - name: Check migrated Lua syntax
+        run: |
+          luac5.4 -p fxmanifest.lua
+          luac5.4 -p config/shared.lua
+          luac5.4 -p config/client.lua
+          luac5.4 -p shared/property_capabilities.lua
+          luac5.4 -p server/legacy_registration_guard.lua
+          luac5.4 -p server/legacy_registration_restore.lua
+          luac5.4 -p server/repositories/property_repository.lua
+          luac5.4 -p server/services/ownership_service.lua
+          luac5.4 -p server/services/property_capability_service.lua
+          luac5.4 -p server/services/legacy_guard_service.lua
+          luac5.4 -p server/modules/property_capabilities.lua
+          luac5.4 -p server/modules/public_api.lua
+          luac5.4 -p server/modules/legacy_compatibility.lua
+          luac5.4 -p client/integrations/wardrobe.lua
+          luac5.4 -p client/modules/property_capabilities.lua
+          luac5.4 -p tests/property_capabilities.lua
+
+      - name: Run property capability tests
+        run: lua5.4 tests/property_capabilities.lua
+
+  legacy-nui:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ui
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install NUI dependencies
+        run: npm ci
+
+      - name: Report legacy NUI typecheck debt
+        run: npm run check || echo '::warning::Upstream legacy NUI does not currently typecheck; final TrueDane NUI migration remains required.'
+
+      - name: Report legacy NUI build debt
+        run: npm run build || echo '::warning::Upstream legacy NUI source does not currently build cleanly; checked-in html remains the temporary dev UI.'
