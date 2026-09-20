@@ -314,6 +314,10 @@ local function persistFurniture(property)
 end
 
 local function canPlaceCart(property, identifier, items)
+	if not PropertyCapabilities.CanManageFeatures(property.propertyData, identifier) then
+		return nil, "PROPERTY_MANAGE_FORBIDDEN"
+	end
+
 	local pendingCounts = {
 		storage = 0,
 		clothing = 0,
