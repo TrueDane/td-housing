@@ -105,13 +105,20 @@ assert(storage.slots == 30, "property storage slots should override shell")
 local canPlaceStorage = Capabilities.CanPlaceItem(property, "RESIDENT", "storage")
 local canPlaceWardrobe = Capabilities.CanPlaceItem(property, "RESIDENT", "clothing")
 local canPlaceFurniture, furnitureError = Capabilities.CanPlaceItem(property, "RESIDENT", nil)
-local guestCanPlace = Capabilities.CanPlaceItem(property, "GUEST", "storage")
+local guestCanPlaceStorage, guestStorageError = Capabilities.CanPlaceItem(property, "GUEST", "storage")
+local guestCanPlaceWardrobe, guestWardrobeError = Capabilities.CanPlaceItem(property, "GUEST", "clothing")
+local visitorCanPlaceStorage, visitorStorageError = Capabilities.CanPlaceItem(property, "UNKNOWN", "storage")
 
 assert(canPlaceStorage == true, "fixed properties should still allow storage placement")
 assert(canPlaceWardrobe == true, "fixed properties should still allow wardrobe placement")
 assert(canPlaceFurniture == false, "fixed properties should block normal furniture placement")
 assert(furnitureError == "FURNITURE_PLACEMENT_DISABLED", "fixed furniture error should be stable")
-assert(guestCanPlace == false, "guest should not place property features")
+assert(guestCanPlaceStorage == false, "guest should not place storage")
+assert(guestStorageError == "PROPERTY_MANAGE_FORBIDDEN", "guest storage error should be stable")
+assert(guestCanPlaceWardrobe == false, "guest should not place wardrobe")
+assert(guestWardrobeError == "PROPERTY_MANAGE_FORBIDDEN", "guest wardrobe error should be stable")
+assert(visitorCanPlaceStorage == false, "visitor should not place storage")
+assert(visitorStorageError == "PROPERTY_MANAGE_FORBIDDEN", "visitor storage error should be stable")
 
 property.furnitures = {
 	{
