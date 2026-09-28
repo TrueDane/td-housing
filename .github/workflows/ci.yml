@@ -39,6 +39,7 @@ jobs:
             client/integrations/wardrobe.lua
             client/modules/property_capabilities.lua
             tests/property_capabilities.lua
+            tests/property_capability_service.lua
             tests/property_mutation_service.lua
 
       - name: Install Lua 5.4
@@ -65,10 +66,14 @@ jobs:
           luac5.4 -p client/integrations/wardrobe.lua
           luac5.4 -p client/modules/property_capabilities.lua
           luac5.4 -p tests/property_capabilities.lua
+          luac5.4 -p tests/property_capability_service.lua
           luac5.4 -p tests/property_mutation_service.lua
 
       - name: Run property capability tests
         run: lua5.4 tests/property_capabilities.lua
+
+      - name: Run property capability service tests
+        run: lua5.4 tests/property_capability_service.lua
 
       - name: Run property mutation tests
         run: lua5.4 tests/property_mutation_service.lua
