@@ -437,21 +437,27 @@ exports('IsOwner', function(src, property_id)
 end)
 
 function GetCitizenid(targetSrc, callerSrc)
-    local Player = QBCore.Functions.GetPlayer(tonumber(targetSrc))
-    if not Player then
-        Framework[Config.Notify].Notify(callerSrc, "Player not found.", "error")
+    local citizenid = TD.Player.GetIdentifier(tonumber(targetSrc))
+
+    if not citizenid then
+        if callerSrc then
+            Framework[Config.Notify].Notify(callerSrc, "Player not found.", "error")
+        end
+
         return
     end
-    local PlayerData = Player.PlayerData
-    local citizenid = PlayerData.citizenid
+
     return citizenid
 end
 
 function GetCharName(src)
-    local Player = QBCore.Functions.GetPlayer(tonumber(src))
-    if not Player then return end
-    local PlayerData = Player.PlayerData
-    return PlayerData.charinfo.firstname .. " " .. PlayerData.charinfo.lastname
+    local player = TD.Player.Get(tonumber(src))
+
+    if not player then
+        return
+    end
+
+    return player.name
 end
 
 function GetPlayerData(src)
