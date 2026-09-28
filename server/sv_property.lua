@@ -313,91 +313,12 @@ function Property:removeMloDoorsAccess(citizenid)
     end
 end
 
-function Property:UpdateOwner(data)
-    local targetSrc = data.targetSrc
-    local realtorSrc = data.realtorSrc
+function Property:UpdateOwner()
+    Debug(
+        "Legacy Housing-owned sale flow is disabled. Ownership changes must use the TD-Housing SetOwner public API."
+    )
 
-    if not realtorSrc then Debug("No Realtor Src found") return end
-    if not targetSrc then Debug("No Target Src found") return end
-
-    local previousOwner = self.propertyData.owner
-
-    local targetPlayer  = QBCore.Functions.GetPlayer(tonumber(targetSrc))
-    if not targetPlayer then return end
-
-    local PlayerData = targetPlayer.PlayerData
-    local bank = PlayerData.money.bank
-    local citizenid = PlayerData.citizenid
-
-    self:addMloDoorsAccess(citizenid)
-    if self.propertyData.shell == 'mlo' and DoorResource == 'qb' then
-        Framework[Config.Notify].Notify(targetSrc, "Go far away and come back for the door to update and open/close.", "error")
-    end
-
-    if self.propertyData.owner == citizenid then
-        Framework[Config.Notify].Notify(targetSrc, "You already own this property", "error")
-        Framework[Config.Notify].Notify(realtorSrc, "Client already owns this property", "error")
-        return
-    end
-
-    --add callback 
-    local targetAllow = lib.callback.await("ps-housing:cb:confirmPurchase", targetSrc, self.propertyData.price, self.propertyData.street, self.propertyData.property_id)
-
-    if targetAllow ~= "confirm" then
-        Framework[Config.Notify].Notify(targetSrc, "You did not confirm the purchase", "info")
-        Framework[Config.Notify].Notify(realtorSrc, "Client did not confirm the purchase", "error")
-        return
-    end
-
-    if bank < self.propertyData.price then
-                Framework[Config.Notify].Notify(targetSrc, "You do not have enough money in your bank account", "error")
-            Framework[Config.Notify].Notify(realtorSrc, "Client does not have enough money in their bank account", "error")
-        return
-    end
-
-    targetPlayer.Functions.RemoveMoney('bank', self.propertyData.price, "Bought Property: " .. self.propertyData.street .. " " .. self.property_id)
-
-    local prevPlayer = QBCore.Functions.GetPlayerByCitizenId(previousOwner)
-    local realtor = QBCore.Functions.GetPlayer(tonumber(realtorSrc))
-    local realtorGradeLevel = realtor.PlayerData.job.grade.level
-
-    local commission = math.floor(self.propertyData.price * Config.Commissions[realtorGradeLevel])
-
-    local totalAfterCommission = self.propertyData.price - commission
-
-    if Config.QBManagement then
-        exports['qb-banking']:AddMoney(realtor.PlayerData.job.name, totalAfterCommission)
-    else
-        if prevPlayer ~= nil then
-            Framework[Config.Notify].Notify(prevPlayer.PlayerData.source, "Sold Property: " .. self.propertyData.street .. " " .. self.property_id, "success")
-            prevPlayer.Functions.AddMoney('bank', totalAfterCommission, "Sold Property: " .. self.propertyData.street .. " " .. self.property_id)
-        elseif previousOwner then
-            MySQL.Async.execute('UPDATE `players` SET `bank` = `bank` + @price WHERE `citizenid` = @citizenid', {
-                ['@citizenid'] = previousOwner,
-                ['@price'] = totalAfterCommission
-            })
-        end
-    end
-    
-    realtor.Functions.AddMoney('bank', commission, "Commission from Property: " .. self.propertyData.street .. " " .. self.property_id)
-
-    self.propertyData.owner = citizenid
-
-    MySQL.update("UPDATE properties SET owner_citizenid = @owner_citizenid, for_sale = @for_sale WHERE property_id = @property_id", {
-        ["@owner_citizenid"] = citizenid,
-        ["@for_sale"] = 0,
-        ["@property_id"] = self.property_id
-    })
-
-    self.propertyData.furnitures = {} -- to be fetched on enter
-
-    TriggerClientEvent("ps-housing:client:updateProperty", -1, "UpdateOwner", self.property_id, citizenid)
-    TriggerClientEvent("ps-housing:client:updateProperty", -1, "UpdateForSale", self.property_id, 0)
-    
-    Framework[Config.Logs].SendLog("**House Bought** by: **"..PlayerData.charinfo.firstname.." "..PlayerData.charinfo.lastname.."** for $"..self.propertyData.price.." from **"..realtor.PlayerData.charinfo.firstname.." "..realtor.PlayerData.charinfo.lastname.."** !")
-
-    Framework[Config.Notify].Notify(targetSrc, "You have bought the property for $"..self.propertyData.price, "success")
-    Framework[Config.Notify].Notify(realtorSrc, "Client has bought the property for $"..self.propertyData.price, "success")
+    return false, "LEGACY_OWNER_FLOW_DISABLED"
 end
 
 function Property:UpdateImgs(data)
