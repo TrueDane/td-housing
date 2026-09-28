@@ -119,7 +119,7 @@ end
 RegisterNetEvent("ps-housing:client:setupSpawnUI", function(cData)
 	DoScreenFadeOut(1000)
 
-	local result = lib.callback.await("ps-housing:cb:GetOwnedApartment", source, cData.citizenid)
+	local result = TD.Callback.Await("ps-housing:cb:GetOwnedApartment", cData.citizenid)
 
 	if result then
 		TriggerEvent("qb-spawn:client:setupSpawns", cData, false, nil)
