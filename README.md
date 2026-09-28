@@ -30,7 +30,7 @@ External product
     -> in-memory property state / client synchronization
 ```
 
-Framework and provider access is moving behind `td_bridge`. New TrueDane code must use the stable `TD` API.
+Framework and provider access is moving behind `td_bridge`. New TrueDane code must use the stable `TD` API. The migrated compatibility layer now routes notifications, target zones/entities, radial items and stash registration through `td_bridge`.
 Legacy `ps-housing:*` events remain internally while the original client/UI runtime is being migrated, but they are
 not the integration contract for other TrueDane resources.
 
@@ -38,7 +38,7 @@ not the integration contract for other TrueDane resources.
 
 Required runtime resources:
 
-- `td_bridge`;
+- `td_bridge` 0.6.2+;
 - `ox_lib`;
 - `oxmysql`;
 - `fivem-freecam`;
@@ -166,6 +166,7 @@ The repository CI currently verifies:
 - StyLua formatting for migrated TrueDane Lua;
 - Lua 5.4 syntax for migrated files;
 - property capability tests;
+- property capability service tests, including stable stash IDs and safe removal;
 - property mutation service tests;
 - legacy NUI dependency installation;
 - reporting of the remaining legacy NUI typecheck/build debt.
@@ -184,18 +185,20 @@ At minimum test:
 6. `resident` access;
 7. guest access restrictions;
 8. stash placement/opening;
-9. wardrobe placement/use;
-10. furniture modes `player`, `fixed` and `disabled`;
-11. garage creation/use;
-12. `RegisterProperty`;
-13. `SetOwner`;
-14. `UpdateShell`;
-15. `UpdateGarage`;
-16. `UpdateImages`;
-17. access grant/revoke persistence;
-18. restart persistence after mutations;
-19. TD-Realtor sale ownership transfer;
-20. TD-Realtor rental start/end flow.
+9. verify a non-empty stash cannot be removed;
+10. verify stash contents remain attached to the same furniture after restart/reordering;
+11. wardrobe placement/use;
+12. furniture modes `player`, `fixed` and `disabled`;
+13. garage creation/use;
+14. `RegisterProperty`;
+15. `SetOwner`;
+16. `UpdateShell`;
+17. `UpdateGarage`;
+18. `UpdateImages`;
+19. access grant/revoke persistence;
+20. restart persistence after mutations;
+21. TD-Realtor sale ownership transfer;
+22. TD-Realtor rental start/end flow.
 
 Record Resmon idle and active figures before release.
 
