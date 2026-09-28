@@ -60,7 +60,7 @@ function TriggerClientEvent(eventName, target, ...)
 		eventName = eventName,
 		target = target,
 		args = {
-			...
+			...,
 		},
 	}
 end
@@ -107,7 +107,7 @@ local imagesUpdated, imagesError = Service.UpdateImages("42", {
 assert(imagesUpdated == true, "valid images should be updated")
 assert(imagesError == nil, "valid images should not return an error")
 assert(property.propertyData.extra_imgs[1] == "https://example.invalid/one.jpg", "canonical image state should update")
-assert(property.propertyData.imgs[2] == "https://example.invalid/two.jpg", "legacy image alias should stay synchronized")
+assert(\n\tproperty.propertyData.imgs[2] == "https://example.invalid/two.jpg",\n\t"legacy image alias should stay synchronized"\n)
 
 local invalidImages, invalidImagesError = Service.UpdateImages("42", {
 	"",
