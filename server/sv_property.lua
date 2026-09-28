@@ -276,57 +276,114 @@ function Property:UpdateShell(data)
     Debug("Changed Shell of property with id: " .. self.property_id, "by: " .. GetPlayerName(realtorSrc))
 end
 
-function Property:addMloDoorsAccess(citizenid)
-    if self.propertyData.shell ~= 'mlo' then return end
+local function doorName(propertyId, doorIndex)
+    return ('ps_mloproperty%s_%s'):format(propertyId, doorIndex)
+end
 
-    if DoorResource == 'ox' then
-        local ox_doorlock = exports.ox_doorlock
-        for i=1 , self.propertyData.door_data.count do
-            local door = ox_doorlock:getDoorFromName(('ps_mloproperty%s_%s'):format(self.property_id, i))
-            local data = door.characters or {}
-            table.insert(data, citizenid)
-            ox_doorlock:editDoor(door.id, {characters = data})
-        end
-    else
-        local qb_doorlock = exports['qb-doorlock']
-        for i=1 , self.propertyData.door_data.count do
-            local id = ('ps_mloproperty%s_%s'):format(self.property_id, i)
-            local door = qb_doorlock:getDoor(id)
-            local data = door.authorizedCitizenIDs or {}
-            data[citizenid] = true
-            qb_doorlock:updateDoor(id, {authorizedCitizenIDs = data})
+local function containsIdentifier(identifiers, expected)
+    for index = 1, #identifiers do
+        if identifiers[index] == expected then
+            return true
         end
     end
+
+    return false
+end
+
+function Property:addMloDoorsAccess(citizenid)
+    if self.propertyData.shell ~= 'mlo' then
+        return true
+    end
+
+    for index = 1, self.propertyData.door_data.count do
+        local name = doorName(self.property_id, index)
+        local door, errorCode, errorMessage = TD.Door.Get(name)
+
+        if not door then
+            Debug(
+                ("Unable to read door %s (%s): %s"):format(
+                    name,
+                    errorCode or "UNKNOWN_ERROR",
+                    errorMessage or "Unknown provider error"
+                )
+            )
+            return false
+        end
+
+        local characters = door.characters or {}
+
+        if not containsIdentifier(characters, citizenid) then
+            characters[#characters + 1] = citizenid
+
+            local success, updateError, updateMessage = TD.Door.SetCharacters(name, characters)
+
+            if success ~= true then
+                Debug(
+                    ("Unable to update door access %s (%s): %s"):format(
+                        name,
+                        updateError or "UNKNOWN_ERROR",
+                        updateMessage or "Unknown provider error"
+                    )
+                )
+                return false
+            end
+        end
+    end
+
+    return true
 end
 
 function Property:removeMloDoorsAccess(citizenid)
-    if self.propertyData.shell ~= 'mlo' then return end
+    if self.propertyData.shell ~= 'mlo' then
+        return true
+    end
 
-    if DoorResource == 'ox' then
-        local ox_doorlock = exports.ox_doorlock
-        for i = 1, self.propertyData.door_data.count do
-            local door = ox_doorlock:getDoorFromName(('ps_mloproperty%s_%s'):format(self.property_id, i))
-            local data = door.characters or {}
-            for index, id in ipairs(data) do
-                if id == citizenid then
-                    table.remove(data, index)
-                    break
-                end
-            end
-            ox_doorlock:editDoor(door.id, {characters = data})
+    for index = 1, self.propertyData.door_data.count do
+        local name = doorName(self.property_id, index)
+        local door, errorCode, errorMessage = TD.Door.Get(name)
+
+        if not door then
+            Debug(
+                ("Unable to read door %s (%s): %s"):format(
+                    name,
+                    errorCode or "UNKNOWN_ERROR",
+                    errorMessage or "Unknown provider error"
+                )
+            )
+            return false
         end
-    else
-        local qb_doorlock = exports['qb-doorlock']
-        for i = 1, self.propertyData.door_data.count do
-            local id = ('ps_mloproperty%s_%s'):format(self.property_id, i)
-            local door = qb_doorlock:getDoor(id)
-            local data = door.authorizedCitizenIDs or {}
-            data[citizenid] = nil
-            qb_doorlock:updateDoor(id, {authorizedCitizenIDs = data})
+
+        local characters = {}
+        local changed = false
+
+        for characterIndex = 1, #(door.characters or {}) do
+            local identifier = door.characters[characterIndex]
+
+            if identifier == citizenid then
+                changed = true
+            else
+                characters[#characters + 1] = identifier
+            end
+        end
+
+        if changed then
+            local success, updateError, updateMessage = TD.Door.SetCharacters(name, characters)
+
+            if success ~= true then
+                Debug(
+                    ("Unable to update door access %s (%s): %s"):format(
+                        name,
+                        updateError or "UNKNOWN_ERROR",
+                        updateMessage or "Unknown provider error"
+                    )
+                )
+                return false
+            end
         end
     end
-end
 
+    return true
+end
 function Property:UpdateOwner()
     Debug(
         "Legacy Housing-owned sale flow is disabled. Ownership changes must use the TD-Housing SetOwner public API."
@@ -472,6 +529,23 @@ function Property:DeleteProperty(data)
         end
     end)
 
+    if self.propertyData.shell == "mlo" and TD.HasCapability("doorlock", "remove") then
+        for index = 1, self.propertyData.door_data.count do
+            local name = doorName(propertyid, index)
+            local removed, doorError, doorMessage = TD.Door.Remove(name)
+
+            if removed ~= true and doorError ~= "DOOR_NOT_FOUND" then
+                Debug(
+                    ("Unable to remove door %s (%s): %s"):format(
+                        name,
+                        doorError or "UNKNOWN_ERROR",
+                        doorMessage or "Unknown provider error"
+                    )
+                )
+            end
+        end
+    end
+
     TriggerClientEvent("ps-housing:client:removeProperty", -1, propertyid)
 
     Framework[Config.Notify].Notify(realtorSrc, "Property with id: " .. propertyid .." has been removed.", "info")
@@ -601,16 +675,18 @@ RegisterNetEvent('ps-housing:server:raidProperty', function(property_id)
                     end
 
                     if property.propertyData.shell == 'mlo' then
-                        if DoorResource == 'ox' then
-                            local ox_doorlock = exports.ox_doorlock
-                            for i=1 , property.propertyData.door_data.count do
-                                local door = ox_doorlock:getDoorFromName(('ps_mloproperty%s_%s'):format(property.property_id, i))
-                                ox_doorlock:setDoorState(door.id, 0)
-                            end
-                        else
-                            for i=1 , property.propertyData.door_data.count do
-                                local id = ('ps_mloproperty%s_%s'):format(property.property_id, i)
-                                TriggerEvent('qb-doorlock:server:updateState', id, false, false, false, false, true, true, src)
+                        for index = 1, property.propertyData.door_data.count do
+                            local name = doorName(property.property_id, index)
+                            local unlocked, doorError, doorMessage = TD.Door.SetLocked(name, false, src)
+
+                            if unlocked ~= true then
+                                Debug(
+                                    ("Unable to unlock raid door %s (%s): %s"):format(
+                                        name,
+                                        doorError or "UNKNOWN_ERROR",
+                                        doorMessage or "Unknown provider error"
+                                    )
+                                )
                             end
                         end
                     end

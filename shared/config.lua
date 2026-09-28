@@ -7,11 +7,13 @@ exports('GetApartments', function() return ApartmentsTable end)
 Config = {}
 
 -- If you're not utilizing ox_lib, it's time to question your approach.
-Config.Target = "qb" -- "ox" or "qb"
-Config.Notify = "qb" -- "ox" or "qb"
-Config.Radial = "qb" -- "ox" or "qb"
-Config.Inventory = "qb" -- "ox" or "qb"
-Config.Logs = "qb" -- "qb"
+-- Provider selection belongs to td_bridge. These compatibility keys intentionally
+-- point at the internal TD adapter while the inherited Housing runtime is migrated.
+Config.Target = "td"
+Config.Notify = "td"
+Config.Radial = "td"
+Config.Inventory = "td"
+Config.Logs = "td"
 
 -- Anyone provided with keys to a property has the ability to modify its furnishings.
 Config.AccessCanEditFurniture = true

@@ -38,11 +38,11 @@ not the integration contract for other TrueDane resources.
 
 Required runtime resources:
 
-- `td_bridge` 0.6.2+;
+- `td_bridge` 0.6.3+;
 - `ox_lib`;
 - `oxmysql`;
 - `fivem-freecam`;
-- a supported doorlock/provider setup selected by the Housing compatibility layer.
+- a doorlock provider selected in `td_bridge` (`ox_doorlock` or `qb_doorlock`).
 
 Provider-specific framework, inventory, target, wardrobe and garage resources must start before TD-Housing when selected.
 
@@ -154,7 +154,6 @@ The remaining migration debt is primarily inside the inherited Housing runtime:
 
 - legacy `ps-housing:*` client event namespace;
 - legacy Housing NUI source;
-- remaining direct framework/provider calls in inherited runtime files;
 - final provider-neutral migration of spawn, weather, garage and character-creation compatibility.
 
 These internal compatibility surfaces must not be copied into new TrueDane code.

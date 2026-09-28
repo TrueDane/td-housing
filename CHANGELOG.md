@@ -15,6 +15,7 @@ All notable TD-Housing TrueDane 3.0 migration changes are documented here.
 - Storage furniture now persists a stable `stash_id` so stash contents do not move when furniture ordering changes.
 - Storage removal is server-authoritative and refuses non-empty or unverifiable stashes.
 - TD-Housing runtime storage removal requires `td_bridge` 0.6.2+ with `TD.Inventory.IsEmpty`.
+- MLO door creation, lookup, character access, raid unlock and supported deletion now use the `TD.Door` boundary from `td_bridge` 0.6.3+.
 - Added regression coverage for stable stash migration, non-empty stash protection and normalized Realtor duty handling.
 
 ### Added
