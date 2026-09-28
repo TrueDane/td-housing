@@ -611,12 +611,11 @@ RegisterNetEvent("ps-housing:server:showcaseProperty", function(property_id)
     end
 
 
-    local PlayerData = GetPlayerData(src)
-    local job = PlayerData.job
-    local jobName = job.name
-    local onDuty = job.onduty
+    local job = TD.Player.GetJob(src)
+    local jobName = job and job.name
+    local onDuty = job and job.is_on_duty == true
 
-    if RealtorJobs[jobName] and onDuty then
+    if jobName and RealtorJobs[jobName] and onDuty then
         local showcase = lib.callback.await('ps-housing:cb:showcase', src)
         if showcase == "confirm" then
             property:PlayerEnter(src)
@@ -636,18 +635,17 @@ RegisterNetEvent('ps-housing:server:raidProperty', function(property_id)
         return 
     end
 
-    local Player = QBCore.Functions.GetPlayer(src)
-    if not Player then return end
-    local PlayerData = Player.PlayerData
-    local job = PlayerData.job
+    local job = TD.Player.GetJob(src)
+
+    if type(job) ~= "table" then
+        return
+    end
+
     local jobName = job.name
-    local gradeAllowed = tonumber(job.grade.level) >= Config.MinGradeToRaid
-    local onDuty = job.onduty
+    local gradeAllowed = (tonumber(job.grade) or 0) >= Config.MinGradeToRaid
+    local onDuty = job.is_on_duty == true
     local raidItem = Config.RaidItem
-
-    -- Check if the police officer has the "stormram" item
-    local hasStormRam = (Config.Inventory == "ox" and exports.ox_inventory:Search(src, "count", raidItem) > 0) or Player.Functions.GetItemByName(raidItem)
-
+    local hasStormRam = (tonumber(TD.Inventory.Count(src, raidItem)) or 0) > 0
     local isAllowedToRaid = PoliceJobs[jobName] and onDuty and gradeAllowed
     if isAllowedToRaid then
         if hasStormRam then
@@ -659,17 +657,11 @@ RegisterNetEvent('ps-housing:server:raidProperty', function(property_id)
                     Framework[Config.Notify].Notify(src, "Raid started", "success")
 
                     if Config.ConsumeRaidItem then
-                        -- Remove the "stormram" item from the officer's inventory
-                        if Config.Inventory == 'ox' then
-                            exports.ox_inventory:RemoveItem(src, raidItem, 1)
-                        else
-                            if lib.checkDependency('qb-inventory', '2.0.0') then
-                                TriggerClientEvent("qb-inventory:client:ItemBox", src, QBCore.Shared.Items[raidItem], "remove")
-                                exports['qb-inventory']:RemoveItem(source, raidItem, 1)
-                            else
-                                TriggerClientEvent("inventory:client:ItemBox", src, QBCore.Shared.Items[raidItem], "remove")
-                                TriggerEvent("inventory:server:RemoveItem", src, raidItem, 1)
-                            end
+                        local removed = TD.Inventory.Remove(src, raidItem, 1, nil, "TD-Housing property raid")
+
+                        if removed ~= true then
+                            Framework[Config.Notify].Notify(src, "Stormram could not be consumed.", "error")
+                            return
                         end
                     end
 
