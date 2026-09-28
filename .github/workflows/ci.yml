@@ -31,6 +31,7 @@ jobs:
             server/repositories/property_repository.lua
             server/services/ownership_service.lua
             server/services/property_capability_service.lua
+            server/services/property_mutation_service.lua
             server/services/legacy_guard_service.lua
             server/modules/property_capabilities.lua
             server/modules/public_api.lua
@@ -38,6 +39,7 @@ jobs:
             client/integrations/wardrobe.lua
             client/modules/property_capabilities.lua
             tests/property_capabilities.lua
+            tests/property_mutation_service.lua
 
       - name: Install Lua 5.4
         run: |
@@ -55,6 +57,7 @@ jobs:
           luac5.4 -p server/repositories/property_repository.lua
           luac5.4 -p server/services/ownership_service.lua
           luac5.4 -p server/services/property_capability_service.lua
+          luac5.4 -p server/services/property_mutation_service.lua
           luac5.4 -p server/services/legacy_guard_service.lua
           luac5.4 -p server/modules/property_capabilities.lua
           luac5.4 -p server/modules/public_api.lua
@@ -62,9 +65,13 @@ jobs:
           luac5.4 -p client/integrations/wardrobe.lua
           luac5.4 -p client/modules/property_capabilities.lua
           luac5.4 -p tests/property_capabilities.lua
+          luac5.4 -p tests/property_mutation_service.lua
 
       - name: Run property capability tests
         run: lua5.4 tests/property_capabilities.lua
+
+      - name: Run property mutation tests
+        run: lua5.4 tests/property_mutation_service.lua
 
   legacy-nui:
     runs-on: ubuntu-latest

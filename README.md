@@ -1,219 +1,213 @@
-# Archiving Older Repos (Focus on ps-mdt v3)
+# TD-Housing
 
-To help streamline things a bit around here (for the little work we actually do 😅), I’m going to be archiving the repos listed below. This doesn’t mean they’re broken or unusable, it just means we won’t be pushing any further updates to them for now.
+TD-Housing is the TrueDane 3.0 housing engine.
 
-Our main focus moving forward will be ps-mdt v3 and its dependencies.
+It owns the physical and persistent housing layer used by products such as `td_realtor`:
 
-# ps-housing IPL & MLO Support
+- property registration and lookup;
+- shells, MLOs and entry state;
+- ownership;
+- resident and guest access;
+- garages;
+- furniture;
+- stash and wardrobe capabilities;
+- property-specific feature settings.
 
-## Table of Contents
+Business workflows such as valuation, auctions, sales, leases and Realtor-company ownership belong in `td_realtor`.
+External resources must integrate through the TD-Housing public API instead of reading or writing the Housing database
+directly.
 
--   [Description](#description)
-    -   [Creating a new property for sale](#creating-a-new-property-for-sale)
-    -   [Furnish and decorate a property](#furnish-and-decorate-a-property)
-    -   [Shell Support](#shell-support)
--   [Installation](#installation)
-    -   [Important](#important)
-    -   [Migrating houses/apartments](#migrating-housesapartments)
-    -   [Item Limits System](#item-limits-system)
-    -   [Logs System Setup](#logs-system-setup)
-    -   [Adding New Shells](#adding-new-shells)
-    -   [Dynamic Doors](#dynamic-doors)
--   [FAQ](#faq)
--   [Preview](#preview)
--   [Credits](#credits)
+## Architecture
 
-## Description
+The migrated TrueDane 3.0 path follows these boundaries:
 
-ps-housing is a resource that opens up a world of creative possibilities for housing. Its user-friendly interface lets you decorate any location to your heart's content. The best part? Not only is it completely free, but it's also reliable and functional, unlike many other housing systems available. What's included?
+```text
+External product
+    -> TD-Housing public export
+    -> service
+    -> repository
+    -> Housing database
+    -> in-memory property state / client synchronization
+```
 
--   Players can decorate their houses and apartments with a full selection of furniture and decorations (included a wide variety of custom housing props)
--   Provides support for housing and apartments and is a full replacement for qb-apartments and qb-housing
-    -   When a player first spawns after enabling ps-housing, they will have to choose an apartment. Once they spawn in the stashitems from their previous qb-apartment will be migrated to their new apartment stash.
--   Allows players to purchase and list houses for sale through `ps-realtor` and the realtor job
--   Houses come with personal garages
--   Houses and apartments come with personal wardrobes and stashes
--   Players can share keys to their houses and apartments with other players
+Framework and provider access is moving behind `td_bridge`. New TrueDane code must use the stable `TD` API.
+Legacy `ps-housing:*` events remain internally while the original client/UI runtime is being migrated, but they are
+not the integration contract for other TrueDane resources.
 
-### Creating a new property for sale
+## Dependencies
 
-Players must have the realtor job to create new properties. Additionally if the realtor has a high enough grade level, they can also help players move to new apartments.
-All properties must be manually configured for sale by the realtor job, giving you full control over all aspects of properties, and bringing another avenue of roleplay to your server.
+Required runtime resources:
 
--   Pick the location where you want to create a new property
--   Use `/housing` to open the housing menu
--   Click on create new property
--   Fill out the details of the property (name, price, description, which shell to use, etc)
--   Choose the door location (this is where the person will enter the house)
-    -   Ensure that you place it up against a wall, since players will use target to enter the house
--   Choose the garage location
-    -   This point is used both for storing vehicles, as well as the location where the vehicle will spawn when taken out of the garage
--   Realtors can edit the details of the property by clicking on the property in the housing menu
--   Players can see the properties for sale through the /housing menu as well
+- `td_bridge`;
+- `ox_lib`;
+- `oxmysql`;
+- `fivem-freecam`;
+- a supported doorlock/provider setup selected by the Housing compatibility layer.
 
-### Furnish and decorate a property
+Provider-specific framework, inventory, target, wardrobe and garage resources must start before TD-Housing when selected.
 
-Once inside the property, the player can furnish and decorate the property to their liking. They can also invite other players to their property, and give them access to the property. Open the furniture store by pressing `Z`.
+## Public server API
 
-This will open a furniture store complete with all of the props. Select an item from the catalog and place it into the property. You can use the placement gizmo to position the item to your liking as well as use the UI tools for fine tune control over the placement. Once you are happy with the positioning, make sure you press `Add to Cart` before moving on. Continue to add as many items as you want to your cart. Once you are done, go to the `Checkout` and purchase the items.
-
-> Note: The place on ground button sometimes does not work properly depending on where the native detects the ground to be.
-
-### Shell Support
-
--   [K4MB1](https://github.com/Project-Sloth/ps-housing/wiki/K4MB1-Shells-Support-&-Offsets)
-
-## Installation
-
-Follow either one or the other installation guides below based on your setup:
-
--   [QB-core installation guide](https://github.com/Project-Sloth/ps-housing/tree/main/README%20-%20INSTALL%20INSTRUCTIONS/QBCore)
--   [Qbox installation guide](https://github.com/Project-Sloth/ps-housing/tree/main/README%20-%20INSTALL%20INSTRUCTIONS/QBOX)
-
-Remember to install the following **dependencies** if you don't already have them:
-
-1. [ox_lib](https://github.com/overextended/ox_lib/releases)
-1. [ps-realtor](https://github.com/Project-Sloth/ps-realtor)
-1. [fivem-freecam](https://github.com/Deltanic/fivem-freecam)
-1. [ox_target](https://github.com/overextended/ox_target) or [qb-target](https://github.com/qbcore-framework/qb-target)
-
-Furthermore, make sure you start the shown dependencies in the correct order as below:
+The TrueDane integration contract currently exposes:
 
 ```lua
--- server.cfg
+exports['td_housing']:RegisterProperty(propertyData, preventEnter, playerSource)
+exports['td_housing']:GetProperty(propertyId)
+exports['td_housing']:GetOwnedProperties(identifier)
 
+exports['td_housing']:SetOwner(propertyId, identifier)
+exports['td_housing']:UpdateShell(propertyId, shell)
+exports['td_housing']:UpdateGarage(propertyId, garage)
+exports['td_housing']:UpdateImages(propertyId, images)
+
+exports['td_housing']:GetPropertyCapabilities(propertyId)
+exports['td_housing']:ApplyPropertySettings(propertyId, settings)
+exports['td_housing']:GrantAccess(propertyId, identifier, role)
+exports['td_housing']:RevokeAccess(propertyId, identifier)
+```
+
+### Access roles
+
+Supported public access roles are:
+
+- `owner` — derived from property ownership;
+- `resident` — intended for tenants and other trusted residents;
+- `guest` — door access without resident feature-management permissions;
+- `visitor` — derived for players without access.
+
+TD-Realtor rentals use `resident` access without transferring ownership.
+
+### Property settings
+
+`ApplyPropertySettings` supports the generic capability configuration used by Realtor and future products:
+
+```lua
+{
+    furnitureMode = 'player', -- player | fixed | disabled
+    storage = {
+        enabled = true,
+        maxPlacements = 1,
+    },
+    wardrobe = {
+        enabled = true,
+        maxPlacements = 1,
+    },
+}
+```
+
+All protected state changes are validated server-side. Client state must not be treated as authoritative.
+
+## Database
+
+Base schema:
+
+```text
+sql/td_housing.sql
+```
+
+Apply migrations in order:
+
+```text
+migrations/001_property_capabilities.sql
+migrations/002_remove_framework_owner_fk.sql
+```
+
+TD-Housing owns the `properties` table. Other TrueDane resources must not join against or mutate that table directly;
+use the public API instead.
+
+Existing property data must be preserved during migration.
+
+## Suggested start order
+
+A typical development order is:
+
+```cfg
+ensure oxmysql
 ensure ox_lib
-ensure ps-realtor
-ensure ps-housing
+
+# Framework/providers selected by td_bridge
+ensure qbx_core
+# ensure ox_inventory
+# ensure ox_target
+
+ensure td_bridge
+
+# Selected doorlock / garage / wardrobe providers
+ensure ox_doorlock
+
 ensure fivem-freecam
+ensure td_housing
+
+# Products using Housing start afterwards
+ensure td-business
+ensure nrp_tablet
+ensure td_realtor
 ```
 
-### Stashes
+Adjust provider names to the server configuration.
 
--   Players need to place their [stash](https://github.com/Project-Sloth/ps-housing/blob/7efd2009050b9a20969877cf69b284352a9309bf/shared/config.lua#LL426C96-L426C96) and [wardrobe](https://github.com/Project-Sloth/ps-housing/blob/7efd2009050b9a20969877cf69b284352a9309bf/shared/config.lua#L427) or else they wont have one. Check [Config](https://github.com/Project-Sloth/ps-housing/blob/7efd2009050b9a20969877cf69b284352a9309bf/shared/config.lua#L422) for more information.
+## Development status
 
-This entire README is meant for compatibility with default QBCore scripts. If you have different scripts, you'll need to adjust them for compatibility yourself. Refrain from asking us how to circumvent paid scripts that can't be adjusted for ps-housing support. Instead, request their support for ps-housing - this script is fully open source for that reason. Any inquiries related to this be ignored.
+The TrueDane 3.0 server boundary is active for ownership, access, property capabilities and Realtor property mutations.
 
-### Migrating houses/apartments
+The remaining migration debt is primarily inside the inherited Housing runtime:
 
-1. From a client run the `migratehouses` command to automatically convert all houses from qb-houses. It will print a message to the console once complete. **The `migratehouses` command MUST be run from a client in order to retrieve street and region data for each house**
+- legacy `ps-housing:*` client event namespace;
+- legacy Housing NUI source;
+- remaining direct framework/provider calls in inherited runtime files;
+- final provider-neutral migration of spawn, weather, garage and character-creation compatibility.
 
-2. From a client or server console run the `migrateapartments` command to automatically convert all apartments from qb-apartments. It will print a message to the console once complete.
+These internal compatibility surfaces must not be copied into new TrueDane code.
 
-### Item Limits System
+## CI
 
-1. Choose an item you want to limit under `Config.Furniture` in under `shared/config.lua`
-2. Add `["max"] = 3` or the number of your choice to the item (see example below)
+The repository CI currently verifies:
 
-```lua
-{ ["object"] = "v_res_r_figcat", ["price"] = 300, ["max"] = 2, ["label"] = "Fig Cat" },
-```
+- StyLua formatting for migrated TrueDane Lua;
+- Lua 5.4 syntax for migrated files;
+- property capability tests;
+- property mutation service tests;
+- legacy NUI dependency installation;
+- reporting of the remaining legacy NUI typecheck/build debt.
 
-### Logs System Setup
+A green CI does not replace an in-game smoke test.
 
-1. Go to `qb-smallresources/server/logs.lua` and add this:
+## Dev-server smoke test
 
-```lua
-['pshousing'] = 'yourdiscordwebhookhere',
-```
+At minimum test:
 
-2. Create a webhook for the channel you want the logs to show up in.
-3. Replace the placeholder with your webhook link.
+1. clean server/resource startup;
+2. existing properties load after restart;
+3. shell property entry/exit;
+4. MLO door access;
+5. owner access;
+6. `resident` access;
+7. guest access restrictions;
+8. stash placement/opening;
+9. wardrobe placement/use;
+10. furniture modes `player`, `fixed` and `disabled`;
+11. garage creation/use;
+12. `RegisterProperty`;
+13. `SetOwner`;
+14. `UpdateShell`;
+15. `UpdateGarage`;
+16. `UpdateImages`;
+17. access grant/revoke persistence;
+18. restart persistence after mutations;
+19. TD-Realtor sale ownership transfer;
+20. TD-Realtor rental start/end flow.
 
-> This system only supports qb-core for now.
+Record Resmon idle and active figures before release.
 
-### Adding New Shells
+## Development rules
 
--   Follow the [ps-housing wiki](https://github.com/Project-Sloth/ps-housing/wiki) information.
+Before a release:
 
-### Dynamic Doors
-
-Dynamic Doors will turn placed doors into actual working doors, Instead of them being static. (See videos below)
-
-### Preview
-
-https://github.com/complexza/ps-housing/assets/74205343/72cfc135-2f78-42b3-a540-45f02567b6d7
-
-https://github.com/complexza/ps-housing/assets/74205343/0ff26e7f-1341-45fc-8fc6-d65421dec0b2
-
-### Setup
-
--   You will need to set the `Config.DynamicDoors = true`
--   You will have to add this convar into your server.cfg `setr game_enableDynamicDoorCreation "true"`
-
-> Note: The convar has to be in your server.cfg in order for the doors to be dynamic!
-
-## FAQ
-
-### Error: `Foreign key constraint is incorrectly formed`
-
-If you come across an error such as `Foreign key constraint is incorrectly formed` while importing the `properties.sql` into your database, follow these steps to fix it.
-
-1. Open your database in HeidiSQL.
-2. Right-click on your database name and select "Edit."
-3. Locate the database collation setting take a note of it.
-4. You will need to format the `properties.sql` file to match your database collation.
-5. Ensure that the collation of your `citizenid` column in your `players` table is `utf8mb4_general_ci` and not `utf8mb4_unicode_ci`
-
-If your database collation is set to `utf8mb4_general_ci`, modify the last line of the `properties.sql` file using VSCode or in HeidiSQL's query tab to the following:
-
-```sql
-) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-```
-
-This adjustment ensures that `properties.sql` file's character set and collation match that of your database, effectively resolving the issue.
-
-## Preview
-
-![image](https://github.com/Project-Sloth/ps-housing/assets/82112471/07b7f8c6-38ea-4f8c-95b6-9bd6bafbbd09)
-![image](https://github.com/Project-Sloth/ps-housing/assets/82112471/163ae847-5a44-48cb-89f5-e0c1e7b59383)
-![image](https://github.com/Project-Sloth/ps-housing/assets/82112471/655d9bb6-6c6d-4676-b4e0-f4368f3325a9)
-![image](https://github.com/Project-Sloth/ps-housing/assets/82112471/fc632975-c2f6-41fb-89cd-a984679f1a41)
-
-# Credits
-
-ps-housing owes its existence to the exceptional coding expertise of [Xirvin#0985](https://github.com/ImXirvin). His application of top-tier coding practices has been instrumental in creating this script. We at Project Sloth are thrilled that he has joined our team and utilized our platform to deliver this incredible, much-anticipated resource. Our sincere appreciation goes out to [Xirvin](https://github.com/ImXirvin) for his outstanding contribution!
-
--   [Xirvin](https://github.com/ImXirvin)
--   [BackSH00TER](https://github.com/backsh00ter)
--   [Byte Labs Project](https://github.com/Byte-Labs-Project)
--   [Project Sloth Team](https://discord.gg/projectsloth)
--   [K4MB1](https://www.k4mb1maps.com/)
--   [Candrex](https://github.com/CandrexDev)
--   [Complexza](https://github.com/complexza)
-
----
-
-# 1of1 Servers - VPS & Dedicated Servers
-
-[![1of1 Servers](https://github.com/user-attachments/assets/29e4ef8e-7b24-4821-a6ce-7c9e3c111fd1)](https://billing.1of1servers.com/aff.php?aff=1)
-
-We are a VPS and dedicated server provider, specializing in strong gaming DDoS protection and 99.9% uptime.  
-
-We host some of the biggest FiveM servers in the industry such as Prodigy RP, Smile RP, The Academy RP, and many more.  
-
----
-
-### Features
-- 4 Tbps DDoS Protection by CosmicGuard  
-- 99.9% Network Uptime  
-- NVMe SSD Storage  
-- Unlimited Player Slots  
-- Free transfer of files and setup  
-- Free Windows licenses  
-- Windows Remote Desktop  
-- 24/7 Support with ~30 min average ticket response  
-
----
-
-### Locations
-- USA: Dallas, Ashburn, Los Angeles, Chicago  
-- Europe: UK, Germany, Netherlands  
-- Asia: Singapore  
-- Australia: Sydney  
-
----
-
-### Links
-- [Website](https://billing.1of1servers.com/aff.php?aff=1)
-- [Discord](https://discord.gg/1of1servers)  
+- migrated Lua must pass StyLua and Lua 5.4 syntax checks;
+- new framework/provider access must use `td_bridge`;
+- protected mutations must be server-authoritative;
+- database access for migrated domain logic belongs in repositories;
+- domain rules belong in services;
+- temporary debug/test commands must not ship;
+- README, CHANGELOG and migrations must match the release;
+- relevant in-game smoke tests and Resmon measurements must be recorded.
