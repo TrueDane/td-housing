@@ -53,12 +53,19 @@ function Property:PlayerEnter(src)
 
     local citizenid = GetCitizenid(src)
 
-    if self:CheckForAccess(citizenid) then
-        local Player = QBCore.Functions.GetPlayer(src)
-        local insideMeta = Player.PlayerData.metadata["inside"]
+    if
+        self:CheckForAccess(citizenid)
+        and TD.HasCapability("framework", "getMetadata")
+        and TD.HasCapability("framework", "setMetadata")
+    then
+        local insideMeta = TD.Player.GetMetadata(src, "inside")
+
+        if type(insideMeta) ~= "table" then
+            insideMeta = {}
+        end
 
         insideMeta.property_id = self.property_id
-        Player.Functions.SetMetaData("inside", insideMeta)
+        TD.Player.SetMetadata(src, "inside", insideMeta)
     end
 
     if not isMlo or isIpl then
@@ -75,12 +82,19 @@ function Property:PlayerLeave(src)
 
     local citizenid = GetCitizenid(src)
 
-    if self:CheckForAccess(citizenid) then
-        local Player = QBCore.Functions.GetPlayer(src)
-        local insideMeta = Player.PlayerData.metadata["inside"]
+    if
+        self:CheckForAccess(citizenid)
+        and TD.HasCapability("framework", "getMetadata")
+        and TD.HasCapability("framework", "setMetadata")
+    then
+        local insideMeta = TD.Player.GetMetadata(src, "inside")
+
+        if type(insideMeta) ~= "table" then
+            insideMeta = {}
+        end
 
         insideMeta.property_id = nil
-        Player.Functions.SetMetaData("inside", insideMeta)
+        TD.Player.SetMetadata(src, "inside", insideMeta)
     end
 
     SetPlayerRoutingBucket(src, 0)
@@ -706,15 +720,24 @@ lib.callback.register("ps-housing:cb:getPlayersWithAccess", function (source, pr
     local withAccess = {}
     local has_access = property.propertyData.has_access
 
+    local onlineNames = {}
+
+    for _, playerSource in ipairs(GetPlayers()) do
+        local sourceId = tonumber(playerSource)
+        local player = sourceId and TD.Player.Get(sourceId) or nil
+
+        if player and player.identifier then
+            onlineNames[player.identifier] = player.name
+        end
+    end
+
     for i = 1, #has_access do
         local citizenid = has_access[i]
-        local Player = QBCore.Functions.GetPlayerByCitizenId(citizenid) or QBCore.Functions.GetOfflinePlayerByCitizenId(citizenid)
-        if Player then
-            withAccess[#withAccess + 1] = {
-                citizenid = citizenid,
-                name = Player.PlayerData.charinfo.firstname .. " " .. Player.PlayerData.charinfo.lastname
-            }
-        end
+
+        withAccess[#withAccess + 1] = {
+            citizenid = citizenid,
+            name = onlineNames[citizenid] or citizenid,
+        }
     end
 
     return withAccess
@@ -722,9 +745,17 @@ end)
 
 RegisterNetEvent('ps-housing:server:resetMetaData', function()
     local src = source
-    local Player = QBCore.Functions.GetPlayer(src)
-    local insideMeta = Player.PlayerData.metadata["inside"]
+
+    if not TD.HasCapability("framework", "setMetadata") then
+        return
+    end
+
+    local insideMeta = TD.HasCapability("framework", "getMetadata") and TD.Player.GetMetadata(src, "inside") or {}
+
+    if type(insideMeta) ~= "table" then
+        insideMeta = {}
+    end
 
     insideMeta.property_id = nil
-    Player.Functions.SetMetaData("inside", insideMeta)
+    TD.Player.SetMetadata(src, "inside", insideMeta)
 end)
