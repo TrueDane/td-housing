@@ -3,9 +3,6 @@ if not DoorResource then
     return error('ox_doorlock/qb-doorlock must be started before ps-housing.') 
 end
 
-QBCore = exports['qb-core']:GetCoreObject()
--- PSCore = exports['ps-core']:GetCoreObject()
-
 local dbloaded = false
 MySQL.ready(function()
     MySQL.query('SELECT * FROM properties', {}, function(result)
@@ -64,6 +61,22 @@ TD.Callback.Register("ps-housing:server:requestProperties", function()
 
     return PropertiesTable
 end)
+
+local function findOnlineSourceByIdentifier(identifier)
+    if type(identifier) ~= "string" or identifier == "" then
+        return nil
+    end
+
+    for _, playerId in ipairs(GetPlayers()) do
+        local playerSource = tonumber(playerId)
+
+        if playerSource and TD.Player.GetIdentifier(playerSource) == identifier then
+            return playerSource
+        end
+    end
+
+    return nil
+end
 
 function RegisterProperty(propertyData, preventEnter, source)
     propertyData.owner = propertyData.owner or nil
@@ -131,13 +144,12 @@ function RegisterProperty(propertyData, preventEnter, source)
     TriggerClientEvent("ps-housing:client:addProperty", -1, propertyData)
 
     if propertyData.apartment and not preventEnter then
-        local player = QBCore.Functions.GetPlayerByCitizenId(propertyData.owner)
-        if not player then
-            print("Error: Player not found for citizen ID " .. propertyData.owner)
+        local src = findOnlineSourceByIdentifier(propertyData.owner)
+
+        if not src then
+            print("Error: Player not found for citizen ID " .. tostring(propertyData.owner))
             return
         end
-
-        local src = player.PlayerData.source
         local property = Property.Get(id)
         if not property then
             print("Error: Property not found for ID " .. id)
@@ -222,32 +234,6 @@ TD.Callback.Register("ps-housing:cb:GetOwnedApartment", function(source, cid)
     return nil
 end)
 
-lib.callback.register("ps-housing:cb:inventoryHasItems", function(source, name, isOx)
-    local success, result
-    if isOx then
-        local items = #exports.ox_inventory:GetInventoryItems(name)
-        return items and items > 0
-    end
-
-    local query = lib.checkDependency('qb-inventory', '2.0.0') and 'SELECT items FROM inventories WHERE identifier = ?' or 'SELECT items FROM stashitems WHERE stash = ?'
-    
-    success, result = pcall(function()
-        return MySQL.query.await(query, { name })
-    end)
-
-    if not success then
-        print("Error querying database for inventory items: " .. result)
-        return false
-    end
-
-    if not result or not result[1] then
-        print("No items found for inventory: " .. name)
-        return false
-    end
-
-    return result[1].items ~= '[]'
-end)
-
 AddEventHandler("ps-housing:server:updateProperty", function(type, property_id, data)
     local property = Property.Get(property_id)
     if not property then return end
@@ -268,14 +254,18 @@ RegisterNetEvent("ps-housing:server:createNewApartment", function(aptLabel)
     local src = source
     local citizenid = GetCitizenid(src)
     if not Config.StartingApartment then return end
-    local PlayerData = GetPlayerData(src)
+    local player = TD.Player.Get(src)
+
+    if not player then
+        return
+    end
 
     local apartment = Config.Apartments[aptLabel]
     if not apartment then return end
 
     local propertyData = {
         owner = citizenid,
-        description = string.format("This is %s's apartment in %s", PlayerData.charinfo.firstname .. " " .. PlayerData.charinfo.lastname, apartment.label),
+        description = string.format("This is %s's apartment in %s", player.name or citizenid, apartment.label),
         for_sale = 0,
         shell = apartment.shell,
         apartment = apartment.label,
@@ -356,7 +346,7 @@ end)
 
 RegisterNetEvent('qb-apartments:returnBucket', function()
     local src = source
-    QBCore.Functions.SetPlayerBucket(src, 0)
+    SetPlayerRoutingBucket(src, 0)
 end)
 
 AddEventHandler("ps-housing:server:addTenantToApartment", function (data)
@@ -387,11 +377,16 @@ AddEventHandler("ps-housing:server:addTenantToApartment", function (data)
         local newApartment = Config.Apartments[apartment]
         if not newApartment then return end
 
-        local citizenid = GetCitizenid(targetSrc, realtorSrc)
-        local targetToAdd = QBCore.Functions.GetPlayerByCitizenId(citizenid).PlayerData
+        local targetPlayer = TD.Player.Get(targetSrc)
+
+        if not targetPlayer then
+            Framework[Config.Notify].Notify(realtorSrc, "Player not found.", "error")
+            return
+        end
+
         local propertyData = {
             owner = targetCitizenid,
-            description = string.format("This is %s's apartment in %s", targetToAdd.charinfo.firstname .. " " .. targetToAdd.charinfo.lastname, newApartment.label),
+            description = string.format("This is %s's apartment in %s", targetPlayer.name or targetCitizenid, newApartment.label),
             for_sale = 0,
             shell = newApartment.shell,
             apartment = newApartment.label,
@@ -402,7 +397,7 @@ AddEventHandler("ps-housing:server:addTenantToApartment", function (data)
         Framework[Config.Logs].SendLog("Creating new apartment for " .. GetPlayerName(targetSrc) .. " in " .. newApartment.label)
 
         Framework[Config.Notify].Notify(targetSrc, "Your apartment is now at "..apartment, "success")
-        Framework[Config.Notify].Notify(realtorSrc, "You have added ".. targetToAdd.charinfo.firstname .. " " .. targetToAdd.charinfo.lastname .. " to apartment "..apartment, "success")
+        Framework[Config.Notify].Notify(realtorSrc, "You have added " .. (targetPlayer.name or targetCitizenid) .. " to apartment " .. apartment, "success")
 
         RegisterProperty(propertyData, true)
 
@@ -414,12 +409,19 @@ AddEventHandler("ps-housing:server:addTenantToApartment", function (data)
 
     property:UpdateApartment(data)
 
-    local citizenid = GetCitizenid(targetSrc, realtorSrc)
-    local targetToAdd = QBCore.Functions.GetPlayerByCitizenId(citizenid)
-    local targetPlayer = targetToAdd.PlayerData
+    local targetPlayer = TD.Player.Get(targetSrc)
 
-    Framework[Config.Notify].Notify(targetSrc, "Your apartment is now at "..apartment, "success")
-    Framework[Config.Notify].Notify(realtorSrc, "You have added ".. targetPlayer.charinfo.firstname .. " " .. targetPlayer.charinfo.lastname .. " to apartment "..apartment, "success")
+    if not targetPlayer then
+        Framework[Config.Notify].Notify(realtorSrc, "Player not found.", "error")
+        return
+    end
+
+    Framework[Config.Notify].Notify(targetSrc, "Your apartment is now at " .. apartment, "success")
+    Framework[Config.Notify].Notify(
+        realtorSrc,
+        "You have added " .. (targetPlayer.name or targetCitizenid) .. " to apartment " .. apartment,
+        "success"
+    )
 end)
 
 exports('IsOwner', function(src, property_id)
@@ -454,15 +456,3 @@ function GetCharName(src)
     return player.name
 end
 
-function GetPlayerData(src)
-    local Player = QBCore.Functions.GetPlayer(tonumber(src))
-    if not Player then return end
-    local PlayerData = Player.PlayerData
-    return PlayerData
-end
-
-function GetPlayer(src)
-    local Player = QBCore.Functions.GetPlayer(tonumber(src))
-    if not Player then return end
-    return Player
-end
