@@ -55,7 +55,7 @@ local function getJobState(playerSource)
 		grade = grade.level or grade.grade
 	end
 
-	return job.name, job.onduty == true or job.onDuty == true, tonumber(grade) or 0
+	return job.name, job.is_on_duty == true or job.onduty == true or job.onDuty == true, tonumber(grade) or 0
 end
 
 local function authorizeEntry(propertyId, playerSource, durationSeconds)
@@ -199,22 +199,53 @@ local function normalizeVector(value)
 	}
 end
 
-local function storageStashId(property, furnitureId)
-	local storageIndex = 0
+local function legacyStorageStashId(propertyId, furnitureIndex, furnitureId)
+	local baseId = ("property_%s"):format(propertyId)
 
+	if furnitureIndex == 1 then
+		return baseId
+	end
+
+	return ("%s%s"):format(baseId, furnitureId)
+end
+
+local function ensureStorageStashIds(propertyData)
+	local changed = false
+
+	for index = 1, #(propertyData.furnitures or {}) do
+		local furniture = propertyData.furnitures[index]
+
+		if type(furniture) == "table" and furniture.type == "storage" then
+			if type(furniture.stash_id) ~= "string" or furniture.stash_id == "" then
+				furniture.stash_id = legacyStorageStashId(propertyData.property_id, index, furniture.id)
+				changed = true
+			end
+		end
+	end
+
+	return changed
+end
+
+local function hasStorageFurniture(property)
+	for index = 1, #property.propertyData.furnitures do
+		if property.propertyData.furnitures[index].type == "storage" then
+			return true
+		end
+	end
+
+	return false
+end
+
+local function storageStashId(property, furnitureId)
 	for index = 1, #property.propertyData.furnitures do
 		local furniture = property.propertyData.furnitures[index]
 
-		if furniture.type == "storage" then
-			storageIndex = storageIndex + 1
-
-			if tostring(furniture.id) == tostring(furnitureId) then
-				if storageIndex == 1 then
-					return ("property_%s"):format(property.property_id)
-				end
-
-				return ("property_%s%s"):format(property.property_id, furniture.id)
+		if furniture.type == "storage" and tostring(furniture.id) == tostring(furnitureId) then
+			if type(furniture.stash_id) == "string" and furniture.stash_id ~= "" then
+				return furniture.stash_id
 			end
+
+			return legacyStorageStashId(property.property_id, index, furniture.id)
 		end
 	end
 
@@ -360,12 +391,25 @@ buildCatalog()
 Property.new = function(self, propertyData)
 	propertyData = hydrateProperty(propertyData)
 
+	local storageIdsChanged = ensureStorageStashIds(propertyData)
 	local inventoryProvider = Framework[Config.Inventory]
 	local originalRegisterInventory = inventoryProvider and inventoryProvider.RegisterInventory
+	local storageFurnitures = {}
+	local storageRegistrationIndex = 0
+
+	for index = 1, #propertyData.furnitures do
+		if propertyData.furnitures[index].type == "storage" then
+			storageFurnitures[#storageFurnitures + 1] = propertyData.furnitures[index]
+		end
+	end
 
 	if originalRegisterInventory then
 		inventoryProvider.RegisterInventory = function(stash, label)
-			return originalRegisterInventory(stash, label, PropertyCapabilities.GetStorageConfig(propertyData))
+			storageRegistrationIndex = storageRegistrationIndex + 1
+			local furniture = storageFurnitures[storageRegistrationIndex]
+			local stableStashId = furniture and furniture.stash_id or stash
+
+			return originalRegisterInventory(stableStashId, label, PropertyCapabilities.GetStorageConfig(propertyData))
 		end
 	end
 
@@ -377,6 +421,10 @@ Property.new = function(self, propertyData)
 
 	if not success then
 		error(instance)
+	end
+
+	if storageIdsChanged then
+		PropertyRepository.UpdateFurniture(propertyData.property_id, propertyData.furnitures)
 	end
 
 	return instance
@@ -667,6 +715,7 @@ function PropertyCapabilityService.BuyFurniture(playerSource, propertyId, items,
 
 	local additions = {}
 	local totalPrice = 0
+	local storageExists = hasStorageFurniture(property)
 
 	for index = 1, #items do
 		local rawItem = items[index]
@@ -678,15 +727,24 @@ function PropertyCapabilityService.BuyFurniture(playerSource, propertyId, items,
 			return nil, "INVALID_FURNITURE_ITEM"
 		end
 
-		totalPrice = totalPrice + catalogItem.price
-		additions[#additions + 1] = {
-			id = ("%d%s"):format(math.random(100000, 999999), property.property_id),
+		local furnitureId = ("%d%s"):format(math.random(100000, 999999), property.property_id)
+		local addition = {
+			id = furnitureId,
 			label = catalogItem.label,
 			object = catalogItem.object,
 			position = position,
 			rotation = rotation,
 			type = catalogItem.type,
 		}
+
+		if catalogItem.type == "storage" then
+			local baseId = ("property_%s"):format(property.property_id)
+			addition.stash_id = storageExists and ("%s%s"):format(baseId, furnitureId) or baseId
+			storageExists = true
+		end
+
+		totalPrice = totalPrice + catalogItem.price
+		additions[#additions + 1] = addition
 	end
 
 	local moneyType
@@ -789,6 +847,28 @@ function PropertyCapabilityService.RemoveFurniture(playerSource, propertyId, fur
 
 	if not PropertyCapabilities.CanModifyFurniture(property.propertyData, identifier, furniture) then
 		return nil, "FURNITURE_REMOVE_FORBIDDEN"
+	end
+
+	if furniture.type == "storage" then
+		if type(TD.Inventory.IsEmpty) ~= "function" then
+			return nil, "STORAGE_STATE_UNAVAILABLE"
+		end
+
+		local stashId = storageStashId(property, furniture.id)
+
+		if not stashId then
+			return nil, "STORAGE_STATE_UNAVAILABLE"
+		end
+
+		local isEmpty = TD.Inventory.IsEmpty(stashId)
+
+		if isEmpty == nil then
+			return nil, "STORAGE_STATE_UNAVAILABLE"
+		end
+
+		if isEmpty ~= true then
+			return nil, "STORAGE_NOT_EMPTY"
+		end
 	end
 
 	table.remove(property.propertyData.furnitures, index)
