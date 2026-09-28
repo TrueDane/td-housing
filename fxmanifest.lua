@@ -45,6 +45,7 @@ server_scripts({
 	"server/repositories/property_repository.lua",
 	"server/services/ownership_service.lua",
 	"server/services/property_capability_service.lua",
+	"server/services/property_mutation_service.lua",
 	"server/services/legacy_guard_service.lua",
 	"server/modules/property_capabilities.lua",
 	"server/modules/public_api.lua",
