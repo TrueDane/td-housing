@@ -26,6 +26,7 @@ jobs:
             config/shared.lua
             config/client.lua
             shared/property_capabilities.lua
+            shared/framework.lua
             server/legacy_registration_guard.lua
             server/legacy_registration_restore.lua
             server/repositories/property_repository.lua
@@ -36,6 +37,7 @@ jobs:
             server/modules/property_capabilities.lua
             server/modules/public_api.lua
             server/modules/legacy_compatibility.lua
+            client/client.lua
             client/integrations/wardrobe.lua
             client/modules/property_capabilities.lua
             tests/property_capabilities.lua
@@ -53,6 +55,9 @@ jobs:
           luac5.4 -p config/shared.lua
           luac5.4 -p config/client.lua
           luac5.4 -p shared/property_capabilities.lua
+          luac5.4 -p shared/framework.lua
+          luac5.4 -p server/server.lua
+          luac5.4 -p server/sv_property.lua
           luac5.4 -p server/legacy_registration_guard.lua
           luac5.4 -p server/legacy_registration_restore.lua
           luac5.4 -p server/repositories/property_repository.lua
@@ -63,11 +68,18 @@ jobs:
           luac5.4 -p server/modules/property_capabilities.lua
           luac5.4 -p server/modules/public_api.lua
           luac5.4 -p server/modules/legacy_compatibility.lua
+          luac5.4 -p client/client.lua
+          luac5.4 -p client/modeler.lua
           luac5.4 -p client/integrations/wardrobe.lua
           luac5.4 -p client/modules/property_capabilities.lua
           luac5.4 -p tests/property_capabilities.lua
           luac5.4 -p tests/property_capability_service.lua
           luac5.4 -p tests/property_mutation_service.lua
+
+      - name: Check migrated runtime provider boundaries
+        run: |
+          ! grep -nE "exports\[['\"]qb-core['\"]\]|QBCore\.Functions" shared/framework.lua client/client.lua client/modeler.lua server/server.lua
+          ! grep -nE "exports\.(ox_target|ox_inventory)|exports\[['\"](?:qb-target|qb-radialmenu|qb-inventory)['\"]\]" shared/framework.lua
 
       - name: Run property capability tests
         run: lua5.4 tests/property_capabilities.lua
