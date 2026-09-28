@@ -57,7 +57,7 @@ MySQL.ready(function()
     end)
 end)
 
-lib.callback.register("ps-housing:server:requestProperties", function()
+TD.Callback.Register("ps-housing:server:requestProperties", function()
     while not dbloaded do
         Wait(100)
     end
@@ -193,39 +193,33 @@ end)
 exports('registerProperty', RegisterProperty) -- triggered by realtor job
 AddEventHandler("ps-housing:server:registerProperty", RegisterProperty)
 
-lib.callback.register("ps-housing:cb:GetOwnedApartment", function(source, cid)
+TD.Callback.Register("ps-housing:cb:GetOwnedApartment", function(source, cid)
     Debug("ps-housing:cb:GetOwnedApartment", source, cid)
-    local result
-    if cid ~= nil then
-        local success, err = pcall(function()
-            result = MySQL.query.await('SELECT * FROM properties WHERE owner_citizenid = ? AND apartment IS NOT NULL AND apartment <> ""', { cid })
-        end)
-        if not success then
-            print("Error querying database for owned apartment with cid: " .. cid .. " - " .. err)
-            return nil
-        end
-    else
-        local src = source
-        local Player = QBCore.Functions.GetPlayer(src)
-        if not Player then
-            print("Error: Player not found for source: " .. src)
-            return nil
-        end
-        local success, err = pcall(function()
-            result = MySQL.query.await('SELECT * FROM properties WHERE owner_citizenid = ? AND apartment IS NOT NULL AND apartment <> ""', { Player.PlayerData.citizenid })
-        end)
-        if not success then
-            print("Error querying database for owned apartment with citizenid: " .. Player.PlayerData.citizenid .. " - " .. err)
-            return nil
-        end
+
+    local identifier = cid or TD.Player.GetIdentifier(source)
+
+    if not identifier then
+        print("Error: Player identifier not found for source: " .. tostring(source))
+        return nil
+    end
+
+    local success, result = pcall(function()
+        return MySQL.query.await(
+            'SELECT * FROM properties WHERE owner_citizenid = ? AND apartment IS NOT NULL AND apartment <> ""',
+            { identifier }
+        )
+    end)
+
+    if not success then
+        print("Error querying database for owned apartment with identifier: " .. identifier .. " - " .. result)
+        return nil
     end
 
     if result and result[1] then
         return result[1]
-    else
-        print("No owned apartment found for the given criteria.")
-        return nil
     end
+
+    return nil
 end)
 
 lib.callback.register("ps-housing:cb:inventoryHasItems", function(source, name, isOx)
