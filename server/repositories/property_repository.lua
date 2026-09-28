@@ -21,6 +21,20 @@ function PropertyRepository.GetCapabilities(propertyId)
 	)
 end
 
+function PropertyRepository.GetOwnedByIdentifier(identifier)
+	return MySQL.query.await(
+		[[
+        SELECT property_id, owner_citizenid, street, region, description, apartment
+        FROM properties
+        WHERE owner_citizenid = ?
+        ORDER BY COALESCE(street, apartment, CAST(property_id AS CHAR)) ASC
+    ]],
+		{
+			identifier,
+		}
+	) or {}
+end
+
 function PropertyRepository.UpdateCapabilities(propertyId, data)
 	return MySQL.update.await(
 		[[
@@ -86,6 +100,51 @@ function PropertyRepository.UpdateOwner(propertyId, identifier)
     ]],
 		{
 			identifier,
+			propertyId,
+		}
+	)
+end
+
+function PropertyRepository.UpdateShell(propertyId, shell)
+	return MySQL.update.await(
+		[[
+        UPDATE properties
+        SET shell = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE property_id = ?
+    ]],
+		{
+			shell,
+			propertyId,
+		}
+	)
+end
+
+function PropertyRepository.UpdateGarage(propertyId, garage)
+	return MySQL.update.await(
+		[[
+        UPDATE properties
+        SET garage_data = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE property_id = ?
+    ]],
+		{
+			encode(garage),
+			propertyId,
+		}
+	)
+end
+
+function PropertyRepository.UpdateImages(propertyId, images)
+	return MySQL.update.await(
+		[[
+        UPDATE properties
+        SET extra_imgs = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE property_id = ?
+    ]],
+		{
+			encode(images),
 			propertyId,
 		}
 	)
