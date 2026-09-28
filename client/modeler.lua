@@ -470,16 +470,11 @@ Modeler = {
             return
         end
 
-        -- seperate loop to get total price so it doesnt have to do all that math for no reason
+        -- The server calculates and validates the authoritative purchase total.
         for _, v in pairs(self.Cart) do
             totalPrice = totalPrice + v.price
         end
 
-        PlayerData = QBCore.Functions.GetPlayerData()
-        if PlayerData.money.cash < totalPrice and PlayerData.money.bank < totalPrice then
-	        Framework[Config.Notify].Notify("You don't have enough money!", "error")
-            return
-        end
         local property = Property.Get(self.property_id)
 
         for _, v in pairs(self.Cart) do

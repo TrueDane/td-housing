@@ -53,17 +53,24 @@ function Property:PlayerEnter(src)
 
     local citizenid = GetCitizenid(src)
 
-    if self:CheckForAccess(citizenid) then
-        local Player = QBCore.Functions.GetPlayer(src)
-        local insideMeta = Player.PlayerData.metadata["inside"]
+    if
+        self:CheckForAccess(citizenid)
+        and TD.HasCapability("framework", "getMetadata")
+        and TD.HasCapability("framework", "setMetadata")
+    then
+        local insideMeta = TD.Player.GetMetadata(src, "inside")
+
+        if type(insideMeta) ~= "table" then
+            insideMeta = {}
+        end
 
         insideMeta.property_id = self.property_id
-        Player.Functions.SetMetaData("inside", insideMeta)
+        TD.Player.SetMetadata(src, "inside", insideMeta)
     end
 
     if not isMlo or isIpl then
         local bucket = tonumber(self.property_id) -- because the property_id is a string
-        QBCore.Functions.SetPlayerBucket(src, bucket)
+        SetPlayerRoutingBucket(src, bucket)
     end
 end
 
@@ -75,15 +82,22 @@ function Property:PlayerLeave(src)
 
     local citizenid = GetCitizenid(src)
 
-    if self:CheckForAccess(citizenid) then
-        local Player = QBCore.Functions.GetPlayer(src)
-        local insideMeta = Player.PlayerData.metadata["inside"]
+    if
+        self:CheckForAccess(citizenid)
+        and TD.HasCapability("framework", "getMetadata")
+        and TD.HasCapability("framework", "setMetadata")
+    then
+        local insideMeta = TD.Player.GetMetadata(src, "inside")
+
+        if type(insideMeta) ~= "table" then
+            insideMeta = {}
+        end
 
         insideMeta.property_id = nil
-        Player.Functions.SetMetaData("inside", insideMeta)
+        TD.Player.SetMetadata(src, "inside", insideMeta)
     end
 
-    QBCore.Functions.SetPlayerBucket(src, 0)
+    SetPlayerRoutingBucket(src, 0)
 end
 
 function Property:CheckForAccess(citizenid)
@@ -313,91 +327,12 @@ function Property:removeMloDoorsAccess(citizenid)
     end
 end
 
-function Property:UpdateOwner(data)
-    local targetSrc = data.targetSrc
-    local realtorSrc = data.realtorSrc
+function Property:UpdateOwner()
+    Debug(
+        "Legacy Housing-owned sale flow is disabled. Ownership changes must use the TD-Housing SetOwner public API."
+    )
 
-    if not realtorSrc then Debug("No Realtor Src found") return end
-    if not targetSrc then Debug("No Target Src found") return end
-
-    local previousOwner = self.propertyData.owner
-
-    local targetPlayer  = QBCore.Functions.GetPlayer(tonumber(targetSrc))
-    if not targetPlayer then return end
-
-    local PlayerData = targetPlayer.PlayerData
-    local bank = PlayerData.money.bank
-    local citizenid = PlayerData.citizenid
-
-    self:addMloDoorsAccess(citizenid)
-    if self.propertyData.shell == 'mlo' and DoorResource == 'qb' then
-        Framework[Config.Notify].Notify(targetSrc, "Go far away and come back for the door to update and open/close.", "error")
-    end
-
-    if self.propertyData.owner == citizenid then
-        Framework[Config.Notify].Notify(targetSrc, "You already own this property", "error")
-        Framework[Config.Notify].Notify(realtorSrc, "Client already owns this property", "error")
-        return
-    end
-
-    --add callback 
-    local targetAllow = lib.callback.await("ps-housing:cb:confirmPurchase", targetSrc, self.propertyData.price, self.propertyData.street, self.propertyData.property_id)
-
-    if targetAllow ~= "confirm" then
-        Framework[Config.Notify].Notify(targetSrc, "You did not confirm the purchase", "info")
-        Framework[Config.Notify].Notify(realtorSrc, "Client did not confirm the purchase", "error")
-        return
-    end
-
-    if bank < self.propertyData.price then
-                Framework[Config.Notify].Notify(targetSrc, "You do not have enough money in your bank account", "error")
-            Framework[Config.Notify].Notify(realtorSrc, "Client does not have enough money in their bank account", "error")
-        return
-    end
-
-    targetPlayer.Functions.RemoveMoney('bank', self.propertyData.price, "Bought Property: " .. self.propertyData.street .. " " .. self.property_id)
-
-    local prevPlayer = QBCore.Functions.GetPlayerByCitizenId(previousOwner)
-    local realtor = QBCore.Functions.GetPlayer(tonumber(realtorSrc))
-    local realtorGradeLevel = realtor.PlayerData.job.grade.level
-
-    local commission = math.floor(self.propertyData.price * Config.Commissions[realtorGradeLevel])
-
-    local totalAfterCommission = self.propertyData.price - commission
-
-    if Config.QBManagement then
-        exports['qb-banking']:AddMoney(realtor.PlayerData.job.name, totalAfterCommission)
-    else
-        if prevPlayer ~= nil then
-            Framework[Config.Notify].Notify(prevPlayer.PlayerData.source, "Sold Property: " .. self.propertyData.street .. " " .. self.property_id, "success")
-            prevPlayer.Functions.AddMoney('bank', totalAfterCommission, "Sold Property: " .. self.propertyData.street .. " " .. self.property_id)
-        elseif previousOwner then
-            MySQL.Async.execute('UPDATE `players` SET `bank` = `bank` + @price WHERE `citizenid` = @citizenid', {
-                ['@citizenid'] = previousOwner,
-                ['@price'] = totalAfterCommission
-            })
-        end
-    end
-    
-    realtor.Functions.AddMoney('bank', commission, "Commission from Property: " .. self.propertyData.street .. " " .. self.property_id)
-
-    self.propertyData.owner = citizenid
-
-    MySQL.update("UPDATE properties SET owner_citizenid = @owner_citizenid, for_sale = @for_sale WHERE property_id = @property_id", {
-        ["@owner_citizenid"] = citizenid,
-        ["@for_sale"] = 0,
-        ["@property_id"] = self.property_id
-    })
-
-    self.propertyData.furnitures = {} -- to be fetched on enter
-
-    TriggerClientEvent("ps-housing:client:updateProperty", -1, "UpdateOwner", self.property_id, citizenid)
-    TriggerClientEvent("ps-housing:client:updateProperty", -1, "UpdateForSale", self.property_id, 0)
-    
-    Framework[Config.Logs].SendLog("**House Bought** by: **"..PlayerData.charinfo.firstname.." "..PlayerData.charinfo.lastname.."** for $"..self.propertyData.price.." from **"..realtor.PlayerData.charinfo.firstname.." "..realtor.PlayerData.charinfo.lastname.."** !")
-
-    Framework[Config.Notify].Notify(targetSrc, "You have bought the property for $"..self.propertyData.price, "success")
-    Framework[Config.Notify].Notify(realtorSrc, "Client has bought the property for $"..self.propertyData.price, "success")
+    return false, "LEGACY_OWNER_FLOW_DISABLED"
 end
 
 function Property:UpdateImgs(data)
@@ -611,12 +546,11 @@ RegisterNetEvent("ps-housing:server:showcaseProperty", function(property_id)
     end
 
 
-    local PlayerData = GetPlayerData(src)
-    local job = PlayerData.job
-    local jobName = job.name
-    local onDuty = job.onduty
+    local job = TD.Player.GetJob(src)
+    local jobName = job and job.name
+    local onDuty = job and job.is_on_duty == true
 
-    if RealtorJobs[jobName] and onDuty then
+    if jobName and RealtorJobs[jobName] and onDuty then
         local showcase = lib.callback.await('ps-housing:cb:showcase', src)
         if showcase == "confirm" then
             property:PlayerEnter(src)
@@ -636,18 +570,17 @@ RegisterNetEvent('ps-housing:server:raidProperty', function(property_id)
         return 
     end
 
-    local Player = QBCore.Functions.GetPlayer(src)
-    if not Player then return end
-    local PlayerData = Player.PlayerData
-    local job = PlayerData.job
+    local job = TD.Player.GetJob(src)
+
+    if type(job) ~= "table" then
+        return
+    end
+
     local jobName = job.name
-    local gradeAllowed = tonumber(job.grade.level) >= Config.MinGradeToRaid
-    local onDuty = job.onduty
+    local gradeAllowed = (tonumber(job.grade) or 0) >= Config.MinGradeToRaid
+    local onDuty = job.is_on_duty == true
     local raidItem = Config.RaidItem
-
-    -- Check if the police officer has the "stormram" item
-    local hasStormRam = (Config.Inventory == "ox" and exports.ox_inventory:Search(src, "count", raidItem) > 0) or Player.Functions.GetItemByName(raidItem)
-
+    local hasStormRam = (tonumber(TD.Inventory.Count(src, raidItem)) or 0) > 0
     local isAllowedToRaid = PoliceJobs[jobName] and onDuty and gradeAllowed
     if isAllowedToRaid then
         if hasStormRam then
@@ -659,17 +592,11 @@ RegisterNetEvent('ps-housing:server:raidProperty', function(property_id)
                     Framework[Config.Notify].Notify(src, "Raid started", "success")
 
                     if Config.ConsumeRaidItem then
-                        -- Remove the "stormram" item from the officer's inventory
-                        if Config.Inventory == 'ox' then
-                            exports.ox_inventory:RemoveItem(src, raidItem, 1)
-                        else
-                            if lib.checkDependency('qb-inventory', '2.0.0') then
-                                TriggerClientEvent("qb-inventory:client:ItemBox", src, QBCore.Shared.Items[raidItem], "remove")
-                                exports['qb-inventory']:RemoveItem(source, raidItem, 1)
-                            else
-                                TriggerClientEvent("inventory:client:ItemBox", src, QBCore.Shared.Items[raidItem], "remove")
-                                TriggerEvent("inventory:server:RemoveItem", src, raidItem, 1)
-                            end
+                        local removed = TD.Inventory.Remove(src, raidItem, 1, nil, "TD-Housing property raid")
+
+                        if removed ~= true then
+                            Framework[Config.Notify].Notify(src, "Stormram could not be consumed.", "error")
+                            return
                         end
                     end
 
@@ -760,157 +687,6 @@ RegisterNetEvent("ps-housing:server:doorbellAnswer", function (data)
     property:PlayerEnter(targetSrc)
 end)
 
---@@ NEED TO REDO THIS DOG SHIT
--- I think its not bad anymore but if u got a better idea lmk
-RegisterNetEvent("ps-housing:server:buyFurniture", function(property_id, items, price, isGarden)
-    local src = source
-
-    local citizenid = GetCitizenid(src)
-    local PlayerData = GetPlayerData(src)
-    local Player = GetPlayer(src)
-
-    local property = Property.Get(property_id)
-    if not property then return end
-
-    if not property:CheckForAccess(citizenid) then return end
-
-    price = tonumber(price)
-
-    if price > PlayerData.money.bank and price > PlayerData.money.cash then
-        Framework[Config.Notify].Notify(src, "You do not have enough money!", "error")
-        return
-    end
-
-    if price <= PlayerData.money.cash then
-        Player.Functions.RemoveMoney('cash', price, "Bought furniture")
-    else
-        Player.Functions.RemoveMoney('bank', price, "Bought furniture")
-    end
-
-    local propertyData = property.propertyData
-    local numFurnitures = #propertyData.furnitures
-    local firstStorage = true
-
-    for _,v in ipairs(propertyData.furnitures) do
-        if v.type == 'storage' then
-            firstStorage = false
-            break
-        end
-    end
-
-    for i = 1, #items do
-        local item = items[i]
-        if item.type == 'storage' then
-            local stashName = ("property_%s"):format(propertyData.property_id)
-            local stashConfig = Config.Shells[propertyData.shell].stash
-            if not propertyData.apartment then
-                Framework[Config.Inventory].RegisterInventory(firstStorage and stashName or stashName .. item.id, 'Property: ' .. propertyData.street .. '#' .. propertyData.property_id, stashConfig)
-            else 
-               Framework[Config.Inventory].RegisterInventory(firstStorage and stashName or stashName .. item.id, 'Property: ' .. propertyData.apartment .. '#' .. propertyData.property_id, stashConfig)
-            end
-        end
-        numFurnitures = numFurnitures + 1
-        propertyData.furnitures[numFurnitures] = item
-    end
-
-    property:UpdateFurnitures(propertyData.furnitures, isGarden)
-
-    Framework[Config.Notify].Notify(src, "You bought furniture for $" .. price, "success")
-
-    Framework[Config.Logs].SendLog("**Player ".. GetPlayerName(src) .. "** bought furniture for **$" .. price .. "**")
-
-    Debug("Player bought furniture for $" .. price, "by: " .. GetPlayerName(src))
-end)
-
-RegisterNetEvent("ps-housing:server:openQBInv", function(data)
-    local src = source
-    local stashId, stashData, propertyId in data
-
-    local property = Property.Get(propertyId)
-    if not property then return end
-
-    local citizenid = GetCitizenid(src)
-    if not property:CheckForAccess(citizenid) then return end
-
-    exports['qb-inventory']:OpenInventory(src, stashId, stashData)
-end)
-
-RegisterNetEvent("ps-housing:server:removeFurniture", function(property_id, itemid)
-    local src = source
-    
-    local property = Property.Get(property_id)
-    if not property then return end
-    
-    local citizenid = GetCitizenid(src)
-    if not property:CheckForAccess(citizenid) then return end
-
-    local currentFurnitures = property.propertyData.furnitures
-
-    for k, v in ipairs(currentFurnitures) do
-        if v.id == itemid then
-            table.remove(currentFurnitures, k)
-            break
-        end
-    end
-
-    property:UpdateFurnitures(currentFurnitures)
-end)
-
--- @@ VERY BAD 
--- I think its not bad anymore but if u got a better idea lmk
-RegisterNetEvent("ps-housing:server:updateFurniture", function(property_id, item)
-    local src = source
-
-    local property = Property.Get(property_id)
-    if not property then return end
-
-    local citizenid = GetCitizenid(src)
-    if not property:CheckForAccess(citizenid) then return end
-
-    local currentFurnitures = property.propertyData.furnitures
-
-    for k, v in ipairs(currentFurnitures) do
-        if v.id == item.id then
-            currentFurnitures[k] = item
-            Debug("Updated furniture", json.encode(item))
-            break
-        end
-    end
-
-    property:UpdateFurnitures(currentFurnitures)
-end)
-
-RegisterNetEvent("ps-housing:server:addAccess", function(property_id, srcToAdd)
-    local src = source
-
-    local citizenid = GetCitizenid(src)
-    local property = Property.Get(property_id)
-    if not property then return end
-
-    if not property.propertyData.owner == citizenid then
-        -- hacker ban or something
-        Framework[Config.Notify].Notify(src, "You are not the owner of this property!", "error")
-        return
-    end
-
-    local has_access = property.propertyData.has_access
-
-    local targetCitizenid = GetCitizenid(srcToAdd)
-    local targetPlayer = GetPlayerData(srcToAdd)
-
-    if not property:CheckForAccess(targetCitizenid) then
-        has_access[#has_access+1] = targetCitizenid
-        property:addMloDoorsAccess(targetCitizenid)
-        property:UpdateHas_access(has_access)
-
-        Framework[Config.Notify].Notify(src, "You added access to " .. targetPlayer.charinfo.firstname .. " " .. targetPlayer.charinfo.lastname, "success")
-        Framework[Config.Notify].Notify(srcToAdd, "You got access to this property!", "success")
-    else
-        Framework[Config.Notify].Notify(src, "This person already has access to this property!", "error")
-    end
-end)
-
-
 RegisterNetEvent("ps-housing:server:qbxRegisterHouse", function(property_id)
     local property = Property.Get(property_id)
     if not property then return end
@@ -933,46 +709,6 @@ RegisterNetEvent("ps-housing:server:qbxRegisterHouse", function(property_id)
     })
 end)
 
-RegisterNetEvent("ps-housing:server:removeAccess", function(property_id, citizenidToRemove)
-    local src = source
-
-    local citizenid = GetCitizenid(src)
-    local property = Property.Get(property_id)
-    if not property then return end
-
-    if not property.propertyData.owner == citizenid then
-        -- hacker ban or something
-        Framework[Config.Notify].Notify(src, "You are not the owner of this property!", "error")
-        return
-    end
-
-    local has_access = property.propertyData.has_access
-
-    if property:CheckForAccess(citizenidToRemove) then
-        for i = 1, #has_access do
-            if has_access[i] == citizenidToRemove then
-                table.remove(has_access, i)
-                break
-            end
-        end 
-
-        property:removeMloDoorsAccess(citizenidToRemove)
-        property:UpdateHas_access(has_access)
-
-        local playerToAdd = QBCore.Functions.GetPlayerByCitizenId(citizenidToRemove) or QBCore.Functions.GetOfflinePlayerByCitizenId(citizenidToRemove)
-        local removePlayerData = playerToAdd.PlayerData
-        local srcToRemove = removePlayerData.source
-
-        Framework[Config.Notify].Notify(src, "You removed access from " .. removePlayerData.charinfo.firstname .. " " .. removePlayerData.charinfo.lastname, "success")
-
-        if srcToRemove then
-            Framework[Config.Notify].Notify(srcToRemove, "You lost access to " .. (property.propertyData.street or property.propertyData.apartment) .. " " .. property.property_id, "error")
-        end
-    else
-        Framework[Config.Notify].Notify(src, "This person does not have access to this property!", "error")
-    end
-end)
-
 lib.callback.register("ps-housing:cb:getPlayersWithAccess", function (source, property_id)
     local src = source
     local citizenidSrc = GetCitizenid(src)
@@ -986,61 +722,30 @@ lib.callback.register("ps-housing:cb:getPlayersWithAccess", function (source, pr
 
     for i = 1, #has_access do
         local citizenid = has_access[i]
-        local Player = QBCore.Functions.GetPlayerByCitizenId(citizenid) or QBCore.Functions.GetOfflinePlayerByCitizenId(citizenid)
-        if Player then
-            withAccess[#withAccess + 1] = {
-                citizenid = citizenid,
-                name = Player.PlayerData.charinfo.firstname .. " " .. Player.PlayerData.charinfo.lastname
-            }
-        end
+        local player = TD.Player.GetByIdentifier(citizenid)
+
+        withAccess[#withAccess + 1] = {
+            citizenid = citizenid,
+            name = player and player.name or citizenid,
+        }
     end
 
     return withAccess
 end)
 
-lib.callback.register('ps-housing:cb:getPropertyInfo', function (source, property_id)
-    local src = source
-    local property = Property.Get(property_id)
-
-    if not property then return end
-
-    
-    local PlayerData = GetPlayerData(src)
-    local job = PlayerData.job
-    local jobName = job.name
-    local onDuty = job.onduty
-
-    if RealtorJobs[jobName] and not onDuty then return end
-
-    local data = {}
-
-    local ownerPlayer, ownerName
-
-    local ownerCid = property.propertyData.owner
-    if ownerCid then
-        ownerPlayer = QBCore.Functions.GetPlayerByCitizenId(ownerCid) or QBCore.Functions.GetOfflinePlayerByCitizenId(ownerCid)
-        ownerName = ownerPlayer.PlayerData.charinfo.firstname .. " " .. ownerPlayer.PlayerData.charinfo.lastname
-    else
-        ownerName = "No Owner"
-    end
-
-    data.owner = ownerName
-    data.street = property.propertyData.street
-    data.region = property.propertyData.region
-    data.description = property.propertyData.description
-    data.for_sale = property.propertyData.for_sale
-    data.price = property.propertyData.price
-    data.shell = property.propertyData.shell
-    data.property_id = property.property_id
-
-    return data
-end)
-
 RegisterNetEvent('ps-housing:server:resetMetaData', function()
     local src = source
-    local Player = QBCore.Functions.GetPlayer(src)
-    local insideMeta = Player.PlayerData.metadata["inside"]
+
+    if not TD.HasCapability("framework", "setMetadata") then
+        return
+    end
+
+    local insideMeta = TD.HasCapability("framework", "getMetadata") and TD.Player.GetMetadata(src, "inside") or {}
+
+    if type(insideMeta) ~= "table" then
+        insideMeta = {}
+    end
 
     insideMeta.property_id = nil
-    Player.Functions.SetMetaData("inside", insideMeta)
+    TD.Player.SetMetadata(src, "inside", insideMeta)
 end)

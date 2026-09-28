@@ -6,6 +6,17 @@ All notable TD-Housing TrueDane 3.0 migration changes are documented here.
 
 ## 0.1.0-dev - 2026-09-28
 
+### Runtime migration
+
+- Routed the Housing compatibility wrapper for notifications, target, radial and stash registration through `td_bridge`.
+- Corrected TD-Target option names to the normalized `on_select` / `can_interact` contract.
+- Property raid authorization now reads normalized job/duty/grade state through `TD.Player` and stormram state through `TD.Inventory`.
+- Player identifier and character-name lookup now use the normalized bridge contract where migrated.
+- Storage furniture now persists a stable `stash_id` so stash contents do not move when furniture ordering changes.
+- Storage removal is server-authoritative and refuses non-empty or unverifiable stashes.
+- TD-Housing runtime storage removal requires `td_bridge` 0.6.2+ with `TD.Inventory.IsEmpty`.
+- Added regression coverage for stable stash migration, non-empty stash protection and normalized Realtor duty handling.
+
 ### Added
 
 - Added the TrueDane 3.0 public Housing boundary for property registration, lookup, ownership and capabilities.
