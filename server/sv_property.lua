@@ -720,23 +720,13 @@ lib.callback.register("ps-housing:cb:getPlayersWithAccess", function (source, pr
     local withAccess = {}
     local has_access = property.propertyData.has_access
 
-    local onlineNames = {}
-
-    for _, playerSource in ipairs(GetPlayers()) do
-        local sourceId = tonumber(playerSource)
-        local player = sourceId and TD.Player.Get(sourceId) or nil
-
-        if player and player.identifier then
-            onlineNames[player.identifier] = player.name
-        end
-    end
-
     for i = 1, #has_access do
         local citizenid = has_access[i]
+        local player = TD.Player.GetByIdentifier(citizenid)
 
         withAccess[#withAccess + 1] = {
             citizenid = citizenid,
-            name = onlineNames[citizenid] or citizenid,
+            name = player and player.name or citizenid,
         }
     end
 
