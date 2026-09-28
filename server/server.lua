@@ -279,10 +279,16 @@ RegisterNetEvent("ps-housing:server:createNewApartment", function(aptLabel)
 end)
 
 -- we show the character creator if they spawn without starting appartment and doesn't have skin set
-RegisterNetEvent("QBCore:Server:OnPlayerLoaded", function()
-    if Config.StartingApartment then return end
+AddEventHandler("td_bridge:server:playerLoaded", function(playerSource)
+    if Config.StartingApartment then
+        return
+    end
 
-    local src = source
+    local src = tonumber(playerSource)
+
+    if not src then
+        return
+    end
     local citizenid = GetCitizenid(src)
     local query = "SELECT skin FROM playerskins WHERE citizenid = ?"
     
