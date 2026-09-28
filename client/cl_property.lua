@@ -738,9 +738,7 @@ function Property:RemoveProperty(doors)
     self:RemoveBlip()
     self:LeaveShell()
     self:UnregisterGarageZone()
-    if doors then TriggerEvent('ps-housing:client:DeleteOxDoors', self.property_id) end
-    --@@ comeback to this
-    -- Think it works now
+    -- Door removal is server-authoritative through TD.Door.
     if self.propertyData.apartment then
         ApartmentsTable[self.propertyData.apartment]:RemoveProperty()
     end
@@ -969,26 +967,6 @@ end)
 
 RegisterNetEvent("ps-housing:client:openFurnitureMenu", function(data)
     Modeler:OpenMenu(data.options.propertyId)
-end)
-
-RegisterNetEvent("ps-housing:client:createOxDoors", function(data)
-    local doors, id in data
-
-    for index, door in ipairs(doors) do
-        local isArray = door[1] ~= nil
-        local name = ('ps_mloproperty%s_%s'):format(id, index)
-
-        door.name = not isArray and name
-
-        local payload = isArray and { doors = door, name = name, maxDistance = 2.5} or door
-
-        TriggerServerEvent('ox_doorlock:editDoorlock', false, payload)
-    end
-end)
-
-RegisterNetEvent("ps-housing:client:DeleteOxDoors", function(propertyid)
-    local name = ('ps_mloproperty%s'):format(propertyid)
-    TriggerServerEvent('ox_doorlock:RemoveDoorlock', name)
 end)
 
 AddEventHandler("ps-housing:client:openManagePropertyAccessMenu", function(data)
