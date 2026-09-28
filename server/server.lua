@@ -1,6 +1,16 @@
-DoorResource = GetResourceState('ox_doorlock') == 'started' and 'ox' or GetResourceState('qb-doorlock') == 'started' and 'qb'
-if not DoorResource then 
-    return error('ox_doorlock/qb-doorlock must be started before ps-housing.') 
+local requiredDoorCapabilities = {
+    "create",
+    "get",
+    "setCharacters",
+    "setLocked",
+}
+
+for index = 1, #requiredDoorCapabilities do
+    local capability = requiredDoorCapabilities[index]
+
+    if not TD.HasCapability("doorlock", capability) then
+        error(("TD-Housing requires td_bridge doorlock.%s"):format(capability))
+    end
 end
 
 local dbloaded = false
@@ -36,10 +46,10 @@ MySQL.ready(function()
             }
             PropertiesTable[id] = Property:new(propertyData)
 
-            if v.shell == 'mlo' and DoorResource == 'qb' and owner then
+            if v.shell == 'mlo' and owner then
                 local property = PropertiesTable[id]
-                -- we add door access for qb doorlock
                 property:addMloDoorsAccess(owner)
+
                 if has_access and #has_access > 0 then
                     for _, citizenId in ipairs(has_access) do
                         property:addMloDoorsAccess(citizenId)
@@ -108,32 +118,40 @@ function RegisterProperty(propertyData, preventEnter, source)
     })
 
     if source and propertyData.shell == 'mlo' then
-        if DoorResource == 'ox' then
-            TriggerClientEvent("ps-housing:client:createOxDoors", source, {
-                id = id,
-                doors = propertyData.door_data
-            })
-        else
-            local qb_doorlock = exports['qb-doorlock']
-            for _, v in ipairs(propertyData.door_data) do
-                local isArray = v[1] and true
-                local success, err = pcall(function()
-                    qb_doorlock:saveNewDoor(source, {
-                        locked = true,
-                        model = isArray and {v[1].model, v[2].model} or v.model,
-                        heading = isArray and {v[1].heading, v[2].heading} or v.heading,
-                        coords = isArray and {v[1].coords, v[2].coords} or v.coords,
-                        distance = 2.5,
-                        doortype = 'door',
-                        id = ('ps_mloproperty%s_%s'):format(id, _)
-                    }, isArray)
-                end)
-                if not success then
-                    print("Error saving new door: " .. err)
-                end
+        for index, door in ipairs(propertyData.door_data) do
+            local isDouble = door[1] ~= nil
+            local name = ('ps_mloproperty%s_%s'):format(id, index)
+            local doorData = {
+                name = name,
+                locked = true,
+                distance = 2.5,
+            }
+
+            if isDouble then
+                doorData.doors = door
+            else
+                doorData.model = door.model
+                doorData.coords = door.coords
+                doorData.heading = door.heading
+            end
+
+            local success, errorCode, errorMessage = TD.Door.Create(source, doorData)
+
+            if success ~= true then
+                error(
+                    ("Failed to create Housing door %s (%s): %s"):format(
+                        name,
+                        errorCode or "UNKNOWN_ERROR",
+                        errorMessage or "Unknown provider error"
+                    )
+                )
             end
         end
-        propertyData.door_data = {count = #propertyData.door_data}
+
+        propertyData.door_data = {
+            count = #propertyData.door_data,
+        }
+
         Wait(1000)
     end
 
@@ -195,7 +213,9 @@ local function getMainDoor(propertyId, doorIndex, isShell)
     end
     
     local id = ('ps_mloproperty%s_%s'):format(propertyId, doorIndex)
-    return DoorResource == 'ox' and exports.ox_doorlock:getDoorFromName(id) or DoorResource == 'qb' and exports['qb-doorlock']:getDoor(id)
+    local door = TD.Door.Get(id)
+
+    return door and door.raw or nil
 end
 exports('getMainDoor', getMainDoor)
 lib.callback.register("ps-housing:cb:getMainMloDoor", function(_, propertyId, doorIndex)
