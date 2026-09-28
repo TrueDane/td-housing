@@ -63,7 +63,7 @@ function Property:PlayerEnter(src)
 
     if not isMlo or isIpl then
         local bucket = tonumber(self.property_id) -- because the property_id is a string
-        QBCore.Functions.SetPlayerBucket(src, bucket)
+        SetPlayerRoutingBucket(src, bucket)
     end
 end
 
@@ -83,7 +83,7 @@ function Property:PlayerLeave(src)
         Player.Functions.SetMetaData("inside", insideMeta)
     end
 
-    QBCore.Functions.SetPlayerBucket(src, 0)
+    SetPlayerRoutingBucket(src, 0)
 end
 
 function Property:CheckForAccess(citizenid)
