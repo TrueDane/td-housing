@@ -80,6 +80,9 @@ jobs:
         run: |
           ! grep -nE "exports\[['\"]qb-core['\"]\]|QBCore\.Functions" shared/framework.lua client/client.lua client/modeler.lua server/server.lua
           ! grep -nE "exports\.(ox_target|ox_inventory)|exports\[['\"](?:qb-target|qb-radialmenu|qb-inventory)['\"]\]" shared/framework.lua
+          ! grep -nE "qbx_garages|qb-garages|ps-housing:server:qbxRegisterHouse" client/cl_property.lua server/sv_property.lua
+          grep -n "TD.Garage.RegisterHouse" server/sv_property.lua
+          grep -n "propertyData.owner ~= citizenid" server/sv_property.lua
 
       - name: Run property capability tests
         run: lua5.4 tests/property_capabilities.lua
