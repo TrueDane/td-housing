@@ -31,6 +31,24 @@ function Property:new(propertyData)
     return self
 end
 
+local function setWeatherSync(src, enabled)
+    if not TD.HasCapability("weather", "setSync") then
+        return
+    end
+
+    local success, weatherError, weatherMessage = TD.Weather.SetSync(src, enabled)
+
+    if success ~= true then
+        Debug(
+            ("Unable to set weather sync for player %s (%s): %s"):format(
+                src,
+                weatherError or "UNKNOWN_ERROR",
+                weatherMessage or "Unknown provider error"
+            )
+        )
+    end
+end
+
 function Property:PlayerEnter(src)
     local _src = tostring(src)
     local isMlo = self.propertyData.shell == 'mlo'
@@ -39,7 +57,7 @@ function Property:PlayerEnter(src)
     self.playersInside[_src] = true
 
     if not isMlo then
-        TriggerClientEvent('qb-weathersync:client:DisableSync', src)
+        setWeatherSync(src, false)
     end
     TriggerClientEvent('ps-housing:client:enterProperty', src, self.property_id, isMlo, self.propertyData)
 
@@ -77,7 +95,7 @@ function Property:PlayerLeave(src)
     local _src = tostring(src)
     self.playersInside[_src] = nil
 
-    TriggerClientEvent('qb-weathersync:client:EnableSync', src)
+    setWeatherSync(src, true)
 
     local citizenid = GetCitizenid(src)
 
