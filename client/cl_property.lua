@@ -258,47 +258,36 @@ end
 function Property:RegisterGarageZone()
     if not next(self.propertyData.garage_data) then return end
 
-    if not (self.has_access or self.owner) or not self.owner then
+    if not self.owner then
         return
     end
 
     local garageData = self.propertyData.garage_data
-    local label = self.propertyData.street .. self.property_id .. " Garage"
-
-    local isQbx = GetResourceState('qbx_garages') == 'started'
     local coords = vec4(garageData.x, garageData.y, garageData.z, garageData.h)
 
-    if isQbx then
-        TriggerServerEvent('ps-housing:server:qbxRegisterHouse', self.property_id)
-    else
-        TriggerEvent("qb-garages:client:addHouseGarage", self.property_id, {
-            takeVehicle = {
-                x = garageData.x,
-                y = garageData.y,
-                z = garageData.z,
-                w = garageData.h
-            },
-            type = "house",
-            label = label,
-        })
+    TriggerServerEvent("ps-housing:server:registerGarage", self.property_id)
+
+    if not TD.HasCapability("garage", "setHouseActive") then
+        return
     end
-    if not isQbx then
-        self.garageZone = lib.zones.box({
-            coords = coords.xyz,
-            size = vector3(garageData.length + 5.0, garageData.width + 5.0, 3.5),
-            rotation = coords.w,
-            debug = Config.DebugMode,
-            onEnter = function()
-                TriggerEvent('qb-garages:client:setHouseGarage', self.property_id, true)
-            end,
-        })
-    end
+
+    self.garageZone = lib.zones.box({
+        coords = coords.xyz,
+        size = vector3(garageData.length + 5.0, garageData.width + 5.0, 3.5),
+        rotation = coords.w,
+        debug = Config.DebugMode,
+        onEnter = function()
+            TD.Garage.SetHouseActive(self.property_id, true)
+        end,
+    })
 end
 
 function Property:UnregisterGarageZone()
-    if not self.garageZone then return end
+    if TD.HasCapability("garage", "removeHouse") then
+        TD.Garage.RemoveHouse(self.property_id)
+    end
 
-    TriggerEvent("qb-garages:client:removeHouseGarage", self.property_id)
+    if not self.garageZone then return end
 
     self.garageZone:remove()
     self.garageZone = nil
