@@ -30,7 +30,7 @@ External product
     -> in-memory property state / client synchronization
 ```
 
-Framework and provider access is moving behind `td_bridge`. New TrueDane code must use the stable `TD` API. The migrated compatibility layer now routes notifications, target zones/entities, radial items and stash registration through `td_bridge`.
+Framework and provider access is moving behind `td_bridge`. New TrueDane code must use the stable `TD` API. The migrated compatibility layer now routes notifications, target zones/entities, radial items, stash registration, MLO door lifecycle and property garage integration through `td_bridge`.
 Legacy `ps-housing:*` events remain internally while the original client/UI runtime is being migrated, but they are
 not the integration contract for other TrueDane resources.
 
@@ -38,11 +38,16 @@ not the integration contract for other TrueDane resources.
 
 Required runtime resources:
 
-- `td_bridge` 0.6.3+;
+- `td_bridge` 0.6.4+;
 - `ox_lib`;
 - `oxmysql`;
 - `fivem-freecam`;
 - a doorlock provider selected in `td_bridge` (`ox_doorlock` or `qb_doorlock`).
+
+Properties that use garages additionally require a garage provider selected in `td_bridge`:
+
+- `qbx_garages`; or
+- `qb_garages`.
 
 Provider-specific framework, inventory, target, wardrobe and garage resources must start before TD-Housing when selected.
 
@@ -97,6 +102,30 @@ TD-Realtor rentals use `resident` access without transferring ownership.
 
 All protected state changes are validated server-side. Client state must not be treated as authoritative.
 
+## Garage provider boundary
+
+TD-Housing never calls `qbx_garages` or `qb-garages` directly on the migrated garage path.
+
+The owning character requests registration by property ID only. TD-Housing resolves the authoritative property and garage state server-side, verifies that the requesting character is the owner, and then calls:
+
+```lua
+TD.Garage.RegisterHouse(source, garageId, garageData)
+```
+
+QBox garage access uses the normalized character identifier allow-list through the bridge `canAccess` callback. QB Garages keeps its existing house-garage lifecycle behind bridge capabilities.
+
+Garage provider selection belongs in `td_bridge`, for example:
+
+```lua
+Config.Providers.garage = 'qbx_garages'
+```
+
+or:
+
+```lua
+Config.Providers.garage = 'qb_garages'
+```
+
 ## Database
 
 Base schema:
@@ -130,11 +159,11 @@ ensure qbx_core
 # ensure ox_inventory
 # ensure ox_target
 
-ensure td_bridge
-
-# Selected doorlock / garage / wardrobe providers
+# Optional providers used by Housing
 ensure ox_doorlock
+ensure qbx_garages
 
+ensure td_bridge
 ensure fivem-freecam
 ensure td_housing
 
@@ -144,17 +173,19 @@ ensure nrp_tablet
 ensure td_realtor
 ```
 
-Adjust provider names to the server configuration.
+Adjust provider names to the server configuration. If `td_bridge` is configured to depend on a provider category, the selected provider must already be available when that capability is used.
 
 ## Development status
 
 The TrueDane 3.0 server boundary is active for ownership, access, property capabilities and Realtor property mutations.
 
+The migrated runtime now covers framework/player state, notifications, target/radial interactions, inventory/stash state, MLO door lifecycle and property garages through `td_bridge`.
+
 The remaining migration debt is primarily inside the inherited Housing runtime:
 
 - legacy `ps-housing:*` client event namespace;
 - legacy Housing NUI source;
-- final provider-neutral migration of spawn, weather, garage and character-creation compatibility.
+- final provider-neutral migration of spawn, weather and character-creation/clothing compatibility.
 
 These internal compatibility surfaces must not be copied into new TrueDane code.
 
@@ -164,6 +195,8 @@ The repository CI currently verifies:
 
 - StyLua formatting for migrated TrueDane Lua;
 - Lua 5.4 syntax for migrated files;
+- migrated runtime provider-boundary rules, including rejection of direct garage-provider calls;
+- server-side garage ownership validation on the migrated registration path;
 - property capability tests;
 - property capability service tests, including stable stash IDs and safe removal;
 - property mutation service tests;
@@ -188,16 +221,17 @@ At minimum test:
 10. verify stash contents remain attached to the same furniture after restart/reordering;
 11. wardrobe placement/use;
 12. furniture modes `player`, `fixed` and `disabled`;
-13. garage creation/use;
-14. `RegisterProperty`;
-15. `SetOwner`;
-16. `UpdateShell`;
-17. `UpdateGarage`;
-18. `UpdateImages`;
-19. access grant/revoke persistence;
-20. restart persistence after mutations;
-21. TD-Realtor sale ownership transfer;
-22. TD-Realtor rental start/end flow.
+13. owner garage registration/use with the selected garage provider;
+14. verify a non-owner cannot register another property's garage;
+15. `RegisterProperty`;
+16. `SetOwner`;
+17. `UpdateShell`;
+18. `UpdateGarage`;
+19. `UpdateImages`;
+20. access grant/revoke persistence;
+21. restart persistence after mutations;
+22. TD-Realtor sale ownership transfer;
+23. TD-Realtor rental start/end flow.
 
 Record Resmon idle and active figures before release.
 
