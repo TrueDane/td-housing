@@ -6,6 +6,10 @@ All notable TD-Housing TrueDane 3.0 migration changes are documented here.
 
 ### Runtime migration
 
+- Routed property weather sync enable/disable through `TD.Weather.SetSync` from `td_bridge` 0.6.5+.
+- Removed direct `qb-weathersync` events from the migrated Housing property lifecycle.
+- Kept weather sync optional and capability-gated so Housing can run without a configured weather provider.
+- Added CI regression checks preventing direct weather-provider events from returning to Housing runtime.
 - Routed property garage registration and QB house-garage client lifecycle through `TD.Garage` from `td_bridge` 0.6.4+.
 - Removed direct `qbx_garages` and `qb-garages` calls from the migrated Housing garage path.
 - Added server-side ownership validation before a client-triggered property garage can be registered.
