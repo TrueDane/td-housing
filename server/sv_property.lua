@@ -41,7 +41,6 @@ function Property:PlayerEnter(src)
     if not isMlo then
         TriggerClientEvent('qb-weathersync:client:DisableSync', src)
     end
-    print(src, self.property_id)
     TriggerClientEvent('ps-housing:client:enterProperty', src, self.property_id, isMlo, self.propertyData)
 
     if next(self.playersDoorbell) then
@@ -763,26 +762,55 @@ RegisterNetEvent("ps-housing:server:doorbellAnswer", function (data)
     property:PlayerEnter(targetSrc)
 end)
 
-RegisterNetEvent("ps-housing:server:qbxRegisterHouse", function(property_id)
+RegisterNetEvent("ps-housing:server:registerGarage", function(property_id)
+    local src = source
     local property = Property.Get(property_id)
-    if not property then return end
 
+    if not property or not TD.HasCapability("garage", "registerHouse") then
+        return
+    end
+
+    local citizenid = GetCitizenid(src)
     local propertyData = property.propertyData
-    local label = propertyData.street .. property.property_id .. " Garage"
-    local garageData = propertyData.garage_data
-    local coords = vec4(garageData.x, garageData.y, garageData.z, garageData.h)
 
-    exports.qbx_garages:RegisterGarage('housegarage-'..property_id, {
+    if not citizenid or propertyData.owner ~= citizenid then
+        return
+    end
+
+    local garageData = propertyData.garage_data
+
+    if
+        type(garageData) ~= "table"
+        or type(garageData.x) ~= "number"
+        or type(garageData.y) ~= "number"
+        or type(garageData.z) ~= "number"
+        or type(garageData.h) ~= "number"
+    then
+        return
+    end
+
+    local label = tostring(propertyData.street or propertyData.apartment or "Property") .. property.property_id .. " Garage"
+    local registered, garageError, garageMessage = TD.Garage.RegisterHouse(src, "housegarage-" .. property.property_id, {
+        property_id = property.property_id,
         label = label,
-        vehicleType = 'car',
-        groups = propertyData.owner,
-        accessPoints = {
-            {
-                coords = coords,
-                spawn = coords,
-            }
+        x = garageData.x,
+        y = garageData.y,
+        z = garageData.z,
+        h = garageData.h,
+        allowed_identifiers = {
+            propertyData.owner,
         },
     })
+
+    if registered ~= true then
+        Debug(
+            ("Unable to register garage for property %s (%s): %s"):format(
+                property.property_id,
+                garageError or "UNKNOWN_ERROR",
+                garageMessage or "Unknown provider error"
+            )
+        )
+    end
 end)
 
 lib.callback.register("ps-housing:cb:getPlayersWithAccess", function (source, property_id)
