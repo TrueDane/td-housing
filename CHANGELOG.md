@@ -4,6 +4,14 @@ All notable TD-Housing TrueDane 3.0 migration changes are documented here.
 
 ## [Unreleased]
 
+### Runtime migration
+
+- Routed property garage registration and QB house-garage client lifecycle through `TD.Garage` from `td_bridge` 0.6.4+.
+- Removed direct `qbx_garages` and `qb-garages` calls from the migrated Housing garage path.
+- Added server-side ownership validation before a client-triggered property garage can be registered.
+- QBox garage access now uses the bridge's character-aware access callback instead of passing a character identifier as a framework group.
+- Added CI regression checks preventing direct garage-provider calls from returning to Housing runtime.
+
 ## 0.1.0-dev - 2026-09-28
 
 ### Runtime migration
