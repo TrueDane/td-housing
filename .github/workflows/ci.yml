@@ -110,7 +110,7 @@ jobs:
       - name: Run property mutation tests
         run: lua5.4 tests/property_mutation_service.lua
 
-  legacy-nui:
+  nui:
     runs-on: ubuntu-latest
 
     defaults:
@@ -131,8 +131,8 @@ jobs:
       - name: Install NUI dependencies
         run: npm ci
 
-      - name: Report legacy NUI typecheck debt
-        run: npm run check || echo '::warning::Upstream legacy NUI does not currently typecheck; final TrueDane NUI migration remains required.'
+      - name: Check NUI types
+        run: npm run check
 
-      - name: Report legacy NUI build debt
-        run: npm run build || echo '::warning::Upstream legacy NUI source does not currently build cleanly; checked-in html remains the temporary dev UI.'
+      - name: Build NUI
+        run: npm run build
