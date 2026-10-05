@@ -17,6 +17,197 @@ jobs:
         with:
           ref: feature/td3-release-ready
 
+      - name: Migrate legacy property persistence
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          server_path = Path('server/server.lua')
+          server = server_path.read_text()
+
+          if 'local LegacyPropertyService = TDHousing.LegacyPropertyService' not in server:
+              marker = 'local LegacyApartmentMigrationService = TDHousing.LegacyApartmentMigrationService\n'
+              replacement = marker + 'local LegacyPropertyService = TDHousing.LegacyPropertyService\n'
+              if marker not in server:
+                  raise SystemExit('Unable to locate Housing service declarations')
+              server = server.replace(marker, replacement, 1)
+
+          if 'MySQL.ready(function()' in server:
+              old = '''local dbloaded = false
+          MySQL.ready(function()
+          \tMySQL.query("SELECT * FROM properties", {}, function(result)
+          '''
+              new = '''local dbloaded = false
+          LegacyPropertyService.WhenReady(function()
+          \tlocal success, result = pcall(LegacyPropertyService.LoadAll)
+          \tif not success then
+          \t\tprint("Error querying properties: " .. tostring(result))
+          \t\treturn
+          \tend
+          '''
+              if old not in server:
+                  raise SystemExit('Unable to locate legacy property load header')
+              server = server.replace(old, new, 1)
+
+              old_tail = '''
+          \t\tdbloaded = true
+          \tend, function(err)
+          \t\tprint("Error querying properties: " .. err)
+          \tend)
+          end)
+          '''
+              new_tail = '''
+          \tdbloaded = true
+          end)
+          '''
+              if old_tail not in server:
+                  raise SystemExit('Unable to locate legacy property load tail')
+              server = server.replace(old_tail, new_tail, 1)
+
+          if 'MySQL.insert.await("INSERT INTO properties "' in server:
+              pattern = re.compile(
+                  r'\n\tlocal cols =.*?\n\tlocal id = MySQL\.insert\.await\("INSERT INTO properties " .*?\n\t\}\)\n\n\tif source',
+                  re.S,
+              )
+              replacement = '''
+          \tlocal id = LegacyPropertyService.Create(propertyData)
+          \tif not id then
+          \t\terror("Failed to persist Housing property")
+          \tend
+
+          \tif source'''
+              server, count = pattern.subn(replacement, server, count=1)
+              if count != 1:
+                  raise SystemExit('Unable to replace legacy property insert')
+
+          if 'MySQL.query.await(' in server:
+              pattern = re.compile(
+                  r'\tlocal success, result = pcall\(function\(\)\n\t\treturn MySQL\.query\.await\(\n\t\t\t\'SELECT \* FROM properties WHERE owner_citizenid = \? AND apartment IS NOT NULL AND apartment <> ""\',\n\t\t\t\{ identifier \}\n\t\t\)\n\tend\)',
+                  re.S,
+              )
+              server, count = pattern.subn(
+                  '\tlocal success, result = pcall(LegacyPropertyService.GetOwnedApartment, identifier)',
+                  server,
+                  count=1,
+              )
+              if count != 1:
+                  raise SystemExit('Unable to replace owned-apartment query')
+
+              old_result = '''\tif result and result[1] then
+          \t\treturn result[1]
+          \tend'''
+              new_result = '''\tif result then
+          \t\treturn result
+          \tend'''
+              if old_result not in server:
+                  raise SystemExit('Unable to normalize owned-apartment result')
+              server = server.replace(old_result, new_result, 1)
+
+          if 'MySQL.' in server:
+              raise SystemExit('Direct MySQL access remains in server/server.lua')
+
+          server_path.write_text(server)
+
+          property_path = Path('server/sv_property.lua')
+          prop = property_path.read_text()
+
+          if 'local LegacyPropertyService = TDHousing.LegacyPropertyService' not in prop:
+              marker = 'Property.__index = Property\n'
+              replacement = '''Property.__index = Property
+
+          local LegacyPropertyService = TDHousing.LegacyPropertyService
+
+          local function persist(action, ...)
+          \tlocal handler = LegacyPropertyService[action]
+          \tif type(handler) ~= "function" then
+          \t\tDebug(("Missing legacy property persistence action: %s"):format(action))
+          \t\treturn false
+          \tend
+
+          \tlocal success, result = pcall(handler, ...)
+          \tif not success or result ~= true then
+          \t\tDebug(("Failed to persist legacy property mutation: %s"):format(action))
+          \t\treturn false
+          \tend
+
+          \treturn true
+          end
+          '''
+              if marker not in prop:
+                  raise SystemExit('Unable to locate Property declaration')
+              prop = prop.replace(marker, replacement, 1)
+
+          replacements = [
+              (
+                  r'\n\tMySQL\.update\("UPDATE properties SET furnitures = @furnitures WHERE property_id = @property_id", \{.*?\n\t\}\)',
+                  '\n\tpersist("UpdateFurniture", self.property_id, newfurnitures)',
+              ),
+              (
+                  r'\n\tMySQL\.update\("UPDATE properties SET description = @description WHERE property_id = @property_id", \{.*?\n\t\}\)',
+                  '\n\tpersist("UpdateDescription", self.property_id, description)',
+              ),
+              (
+                  r'\n\tMySQL\.update\("UPDATE properties SET price = @price WHERE property_id = @property_id", \{.*?\n\t\}\)',
+                  '\n\tpersist("UpdatePrice", self.property_id, price)',
+              ),
+              (
+                  r'\n\tMySQL\.update\("UPDATE properties SET for_sale = @for_sale WHERE property_id = @property_id", \{.*?\n\t\}\)',
+                  '\n\tpersist("UpdateForSale", self.property_id, forsale)',
+              ),
+              (
+                  r'\n\tMySQL\.update\("UPDATE properties SET shell = @shell WHERE property_id = @property_id", \{.*?\n\t\}\)',
+                  '\n\tpersist("UpdateShell", self.property_id, shell)',
+              ),
+              (
+                  r'\n\tMySQL\.update\("UPDATE properties SET extra_imgs = @extra_imgs WHERE property_id = @property_id", \{.*?\n\t\}\)',
+                  '\n\tpersist("UpdateImages", self.property_id, imgs)',
+              ),
+              (
+                  r'\n\tMySQL\.update\(\n\t\t"UPDATE properties SET door_data = @door, street = @street, region = @region WHERE property_id = @property_id",\n\t\t\{.*?\n\t\t\}\n\t\)',
+                  '\n\tpersist("UpdateDoor", self.property_id, newDoor, data.street, data.region)',
+              ),
+              (
+                  r'\n\tMySQL\.update\("UPDATE properties SET has_access = @has_access WHERE property_id = @property_id", \{.*?\n\t\}\)',
+                  '\n\tpersist("UpdateAccess", self.property_id, has_access)',
+              ),
+              (
+                  r'\n\tMySQL\.update\("UPDATE properties SET garage_data = @garageCoords WHERE property_id = @property_id", \{.*?\n\t\}\)',
+                  '\n\tpersist("UpdateGarage", self.property_id, newData)',
+              ),
+              (
+                  r'\n\tMySQL\.update\("UPDATE properties SET apartment = @apartment WHERE property_id = @property_id", \{.*?\n\t\}\)',
+                  '\n\tpersist("UpdateApartment", self.property_id, apartment)',
+              ),
+          ]
+
+          for pattern_text, replacement in replacements:
+              if re.search(pattern_text, prop, re.S):
+                  prop = re.sub(pattern_text, replacement, prop, count=1, flags=re.S)
+
+          if 'MySQL.Async.execute("DELETE FROM properties' in prop:
+              delete_pattern = re.compile(
+                  r'\n\tMySQL\.Async\.execute\("DELETE FROM properties WHERE property_id = @property_id", \{.*?\n\tend\)',
+                  re.S,
+              )
+              delete_replacement = '''
+          \tif not persist("Delete", propertyid) then
+          \t\tFramework[Config.Notify].Notify(realtorSrc, "Property could not be removed.", "error")
+          \t\treturn
+          \tend
+
+          \tDebug("Deleted property with id: " .. propertyid, "by: " .. realtorName)'''
+              prop, count = delete_pattern.subn(delete_replacement, prop, count=1)
+              if count != 1:
+                  raise SystemExit('Unable to replace legacy property delete')
+
+          if 'MySQL.' in prop:
+              remaining = [line for line in prop.splitlines() if 'MySQL.' in line]
+              raise SystemExit('Direct MySQL access remains in server/sv_property.lua: ' + ' | '.join(remaining))
+
+          property_path.write_text(prop)
+          PY
+
       - name: Format migrated Lua
         uses: JohnnyMorganz/stylua-action@v4
         with:
@@ -33,6 +224,7 @@ jobs:
             server/repositories/property_repository.lua
             server/repositories/legacy_appearance_repository.lua
             server/repositories/legacy_apartment_repository.lua
+            server/services/legacy_property_service.lua
             server/services/ownership_service.lua
             server/services/property_capability_service.lua
             server/services/property_mutation_service.lua
@@ -51,37 +243,19 @@ jobs:
             tests/property_capability_service.lua
             tests/property_mutation_service.lua
 
-      - name: Repair legacy modeler markup
+      - name: Install Lua 5.4
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
+          sudo apt-get update
+          sudo apt-get install -y lua5.4
 
-          path = Path('ui/src/components/Modeler.svelte')
-          source = path.read_text()
-          old = '''\t\t\t<T.Mesh
-          \t\t\t\tbind:ref={mesh}
-          \t\t\t\tposition.x={$objectPosition.x}
-          \t\t\t\tposition.y={$objectPosition.y}
-          \t\t\t\tposition.z={$objectPosition.z}
-          \t\t\t\tquaternion={5}
-          \t\t\t\tgeometry={new BoxGeometry(0, 0, 0)}
-          \t\t\t\tmaterial={new MeshStandardMaterial()}
-          \t\t\t\trotation.x={$objectEuler.x}
-          \t\t\t\trotation.y={$objectEuler.y}
-          \t\t\t\trotation.z={$objectEuler.z}
-          \t\t\t>'''
-          new = '''\t\t\t<T.Mesh
-          \t\t\t\tbind:ref={mesh}
-          \t\t\t\tgeometry={new BoxGeometry(0, 0, 0)}
-          \t\t\t\tmaterial={new MeshStandardMaterial()}
-          \t\t\t>'''
-
-          if old in source:
-              source = source.replace(old, new, 1)
-              path.write_text(source)
-          elif 'position.x={$objectPosition.x}' in source or 'rotation.x={$objectEuler.x}' in source:
-              raise SystemExit('Legacy modeler transform markup changed unexpectedly')
-          PY
+      - name: Validate Lua architecture
+        run: |
+          luac5.4 -p server/repositories/property_repository.lua
+          luac5.4 -p server/services/legacy_property_service.lua
+          luac5.4 -p server/server.lua
+          luac5.4 -p server/sv_property.lua
+          ! grep -n "MySQL\." server/server.lua server/sv_property.lua
+          grep -n "LegacyPropertyService" server/server.lua server/sv_property.lua
 
       - name: Validate NUI
         working-directory: ui
@@ -99,5 +273,5 @@ jobs:
           git config user.name "True Dane Development"
           git config user.email "80951720+TrueDane@users.noreply.github.com"
           git add -- '*.lua' ui/src/components/Modeler.svelte html
-          git commit -m "fix: normalize release-ready sources"
+          git commit -m "refactor: centralize Housing property persistence"
           git push origin HEAD:feature/td3-release-ready
