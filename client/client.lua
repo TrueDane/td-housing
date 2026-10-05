@@ -101,21 +101,6 @@ CreateThread(function()
 	end
 end)
 
-if GetResourceState("qbx_properties") == "started" then
-	local data = {}
-
-	for apartmentId, apartment in pairs(Config.Apartments) do
-		data[#data + 1] = {
-			label = apartment.label,
-			description = "Luxury Apartments!",
-			enter = vec3(apartment.door.x, apartment.door.y, apartment.door.z),
-			id = apartmentId,
-		}
-	end
-
-	TriggerEvent("ps-housing:setApartments", data)
-end
-
 RegisterNetEvent("ps-housing:client:setupSpawnUI", function(cData)
 	DoScreenFadeOut(1000)
 
