@@ -51,7 +51,46 @@ jobs:
             tests/property_capability_service.lua
             tests/property_mutation_service.lua
 
-      - name: Commit formatting
+      - name: Repair legacy modeler markup
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('ui/src/components/Modeler.svelte')
+          source = path.read_text()
+          old = '''\t\t\t<T.Mesh
+          \t\t\t\tbind:ref={mesh}
+          \t\t\t\tposition.x={$objectPosition.x}
+          \t\t\t\tposition.y={$objectPosition.y}
+          \t\t\t\tposition.z={$objectPosition.z}
+          \t\t\t\tquaternion={5}
+          \t\t\t\tgeometry={new BoxGeometry(0, 0, 0)}
+          \t\t\t\tmaterial={new MeshStandardMaterial()}
+          \t\t\t\trotation.x={$objectEuler.x}
+          \t\t\t\trotation.y={$objectEuler.y}
+          \t\t\t\trotation.z={$objectEuler.z}
+          \t\t\t>'''
+          new = '''\t\t\t<T.Mesh
+          \t\t\t\tbind:ref={mesh}
+          \t\t\t\tgeometry={new BoxGeometry(0, 0, 0)}
+          \t\t\t\tmaterial={new MeshStandardMaterial()}
+          \t\t\t>'''
+
+          if old in source:
+              source = source.replace(old, new, 1)
+              path.write_text(source)
+          elif 'position.x={$objectPosition.x}' in source or 'rotation.x={$objectEuler.x}' in source:
+              raise SystemExit('Legacy modeler transform markup changed unexpectedly')
+          PY
+
+      - name: Validate NUI
+        working-directory: ui
+        run: |
+          npm ci
+          npm run check
+          npm run build
+
+      - name: Commit normalized sources
         run: |
           if git diff --quiet; then
             exit 0
@@ -59,6 +98,6 @@ jobs:
 
           git config user.name "True Dane Development"
           git config user.email "80951720+TrueDane@users.noreply.github.com"
-          git add -- '*.lua'
-          git commit -m "style: format release-ready Lua"
+          git add -- '*.lua' ui/src/components/Modeler.svelte html
+          git commit -m "fix: normalize release-ready sources"
           git push origin HEAD:feature/td3-release-ready
