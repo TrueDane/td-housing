@@ -119,21 +119,26 @@ end
 RegisterNetEvent("ps-housing:client:setupSpawnUI", function(cData)
 	DoScreenFadeOut(1000)
 
-	local result = TD.Callback.Await("ps-housing:cb:GetOwnedApartment", cData.citizenid)
-
-	if result then
-		TriggerEvent("qb-spawn:client:setupSpawns", cData, false, nil)
-		TriggerEvent("qb-spawn:client:openUI", true)
+	if not TD.HasCapability("spawn", "open") then
+		Framework[Config.Notify].Notify("Spawn provider is unavailable.", "error")
+		DoScreenFadeIn(500)
 		return
 	end
 
-	if Config.StartingApartment then
-		TriggerEvent("qb-spawn:client:setupSpawns", cData, true, Config.Apartments)
-	else
-		TriggerEvent("qb-spawn:client:setupSpawns", cData, false, nil)
+	local result = TD.Callback.Await("ps-housing:cb:GetOwnedApartment", cData.citizenid)
+
+	if result or not Config.StartingApartment then
+		TD.Spawn.Open(cData)
+		return
 	end
 
-	TriggerEvent("qb-spawn:client:openUI", true)
+	if TD.HasCapability("spawn", "openStartingApartments") then
+		TD.Spawn.OpenStartingApartments(cData, Config.Apartments)
+		return
+	end
+
+	Debug("Configured spawn provider does not support Housing starting-apartment selection; using generic spawn flow")
+	TD.Spawn.Open(cData)
 end)
 
 AddEventHandler("onResourceStop", function(resourceName)
