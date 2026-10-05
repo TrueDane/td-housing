@@ -9,6 +9,24 @@ Property = {
 }
 Property.__index = Property
 
+local LegacyPropertyService = TDHousing.LegacyPropertyService
+
+local function persist(action, ...)
+	local handler = LegacyPropertyService[action]
+	if type(handler) ~= "function" then
+		Debug(("Missing legacy property persistence action: %s"):format(action))
+		return false
+	end
+
+	local success, result = pcall(handler, ...)
+	if not success or result ~= true then
+		Debug(("Failed to persist legacy property mutation: %s"):format(action))
+		return false
+	end
+
+	return true
+end
+
 function Property:new(propertyData)
 	local self = setmetatable({}, Property)
 
@@ -214,10 +232,7 @@ function Property:UpdateFurnitures(furnitures, isGarden)
 
 	self.propertyData.furnitures = newfurnitures
 
-	MySQL.update("UPDATE properties SET furnitures = @furnitures WHERE property_id = @property_id", {
-		["@furnitures"] = json.encode(newfurnitures),
-		["@property_id"] = self.property_id,
-	})
+	persist("UpdateFurniture", self.property_id, newfurnitures)
 
 	if isGarden then
 		for src, _ in pairs(self.playersInGarden) do
@@ -241,10 +256,7 @@ function Property:UpdateDescription(data)
 
 	self.propertyData.description = description
 
-	MySQL.update("UPDATE properties SET description = @description WHERE property_id = @property_id", {
-		["@description"] = description,
-		["@property_id"] = self.property_id,
-	})
+	persist("UpdateDescription", self.property_id, description)
 
 	TriggerClientEvent("ps-housing:client:updateProperty", -1, "UpdateDescription", self.property_id, description)
 
@@ -265,10 +277,7 @@ function Property:UpdatePrice(data)
 
 	self.propertyData.price = price
 
-	MySQL.update("UPDATE properties SET price = @price WHERE property_id = @property_id", {
-		["@price"] = price,
-		["@property_id"] = self.property_id,
-	})
+	persist("UpdatePrice", self.property_id, price)
 
 	TriggerClientEvent("ps-housing:client:updateProperty", -1, "UpdatePrice", self.property_id, price)
 
@@ -285,10 +294,7 @@ function Property:UpdateForSale(data)
 
 	self.propertyData.for_sale = forsale
 
-	MySQL.update("UPDATE properties SET for_sale = @for_sale WHERE property_id = @property_id", {
-		["@for_sale"] = forsale and 1 or 0,
-		["@property_id"] = self.property_id,
-	})
+	persist("UpdateForSale", self.property_id, forsale)
 
 	TriggerClientEvent("ps-housing:client:updateProperty", -1, "UpdateForSale", self.property_id, forsale)
 
@@ -309,10 +315,7 @@ function Property:UpdateShell(data)
 
 	self.propertyData.shell = shell
 
-	MySQL.update("UPDATE properties SET shell = @shell WHERE property_id = @property_id", {
-		["@shell"] = shell,
-		["@property_id"] = self.property_id,
-	})
+	persist("UpdateShell", self.property_id, shell)
 
 	TriggerClientEvent("ps-housing:client:updateProperty", -1, "UpdateShell", self.property_id, shell)
 
@@ -443,10 +446,7 @@ function Property:UpdateImgs(data)
 
 	self.propertyData.imgs = imgs
 
-	MySQL.update("UPDATE properties SET extra_imgs = @extra_imgs WHERE property_id = @property_id", {
-		["@extra_imgs"] = json.encode(imgs),
-		["@property_id"] = self.property_id,
-	})
+	persist("UpdateImages", self.property_id, imgs)
 
 	TriggerClientEvent("ps-housing:client:updateProperty", -1, "UpdateImgs", self.property_id, imgs)
 
@@ -480,15 +480,7 @@ function Property:UpdateDoor(data)
 	self.propertyData.street = data.street
 	self.propertyData.region = data.region
 
-	MySQL.update(
-		"UPDATE properties SET door_data = @door, street = @street, region = @region WHERE property_id = @property_id",
-		{
-			["@door"] = json.encode(newDoor),
-			["@property_id"] = self.property_id,
-			["@street"] = data.street,
-			["@region"] = data.region,
-		}
-	)
+	persist("UpdateDoor", self.property_id, newDoor, data.street, data.region)
 
 	TriggerClientEvent(
 		"ps-housing:client:updateProperty",
@@ -512,10 +504,7 @@ function Property:UpdateHas_access(data)
 
 	self.propertyData.has_access = has_access
 
-	MySQL.update("UPDATE properties SET has_access = @has_access WHERE property_id = @property_id", {
-		["@has_access"] = json.encode(has_access), --Array of cids
-		["@property_id"] = self.property_id,
-	})
+	persist("UpdateAccess", self.property_id, has_access)
 
 	TriggerClientEvent("ps-housing:client:updateProperty", -1, "UpdateHas_access", self.property_id, has_access)
 
@@ -541,10 +530,7 @@ function Property:UpdateGarage(data)
 
 	self.propertyData.garage_data = newData
 
-	MySQL.update("UPDATE properties SET garage_data = @garageCoords WHERE property_id = @property_id", {
-		["@garageCoords"] = json.encode(newData),
-		["@property_id"] = self.property_id,
-	})
+	persist("UpdateGarage", self.property_id, newData)
 
 	TriggerClientEvent("ps-housing:client:updateProperty", -1, "UpdateGarage", self.property_id, newData)
 
@@ -562,10 +548,7 @@ function Property:UpdateApartment(data)
 
 	self.propertyData.apartment = apartment
 
-	MySQL.update("UPDATE properties SET apartment = @apartment WHERE property_id = @property_id", {
-		["@apartment"] = apartment,
-		["@property_id"] = self.property_id,
-	})
+	persist("UpdateApartment", self.property_id, apartment)
 
 	Framework[Config.Notify].Notify(
 		realtorSrc,
@@ -595,13 +578,12 @@ function Property:DeleteProperty(data)
 	local propertyid = self.property_id
 	local realtorName = GetPlayerName(realtorSrc)
 
-	MySQL.Async.execute("DELETE FROM properties WHERE property_id = @property_id", {
-		["@property_id"] = propertyid,
-	}, function(rowsChanged)
-		if rowsChanged > 0 then
-			Debug("Deleted property with id: " .. propertyid, "by: " .. realtorName)
-		end
-	end)
+	if not persist("Delete", propertyid) then
+		Framework[Config.Notify].Notify(realtorSrc, "Property could not be removed.", "error")
+		return
+	end
+
+	Debug("Deleted property with id: " .. propertyid, "by: " .. realtorName)
 
 	if self.propertyData.shell == "mlo" and TD.HasCapability("doorlock", "remove") then
 		for index = 1, self.propertyData.door_data.count do

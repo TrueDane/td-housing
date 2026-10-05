@@ -15,56 +15,58 @@ end
 
 local AppearanceService = TDHousing.AppearanceService
 local LegacyApartmentMigrationService = TDHousing.LegacyApartmentMigrationService
+local LegacyPropertyService = TDHousing.LegacyPropertyService
 
 local dbloaded = false
-MySQL.ready(function()
-	MySQL.query("SELECT * FROM properties", {}, function(result)
-		if not result then
-			print("Error: No result returned from properties query.")
-			return
-		end
-		if result.id then -- If only one result
-			result = { result }
-		end
-		for _, v in pairs(result) do
-			local id = tostring(v.property_id)
-			local has_access = json.decode(v.has_access)
-			local owner = v.owner_citizenid
-			local propertyData = {
-				property_id = tostring(id),
-				owner = owner,
-				street = v.street,
-				region = v.region,
-				description = v.description,
-				has_access = has_access,
-				extra_imgs = json.decode(v.extra_imgs),
-				furnitures = json.decode(v.furnitures),
-				for_sale = v.for_sale,
-				price = v.price,
-				shell = v.shell,
-				apartment = v.apartment,
-				door_data = json.decode(v.door_data),
-				garage_data = json.decode(v.garage_data),
-				zone_data = v.zone_data,
-			}
-			PropertiesTable[id] = Property:new(propertyData)
+LegacyPropertyService.WhenReady(function()
+	local success, result = pcall(LegacyPropertyService.LoadAll)
+	if not success then
+		print("Error querying properties: " .. tostring(result))
+		return
+	end
+	if not result then
+		print("Error: No result returned from properties query.")
+		return
+	end
+	if result.id then -- If only one result
+		result = { result }
+	end
+	for _, v in pairs(result) do
+		local id = tostring(v.property_id)
+		local has_access = json.decode(v.has_access)
+		local owner = v.owner_citizenid
+		local propertyData = {
+			property_id = tostring(id),
+			owner = owner,
+			street = v.street,
+			region = v.region,
+			description = v.description,
+			has_access = has_access,
+			extra_imgs = json.decode(v.extra_imgs),
+			furnitures = json.decode(v.furnitures),
+			for_sale = v.for_sale,
+			price = v.price,
+			shell = v.shell,
+			apartment = v.apartment,
+			door_data = json.decode(v.door_data),
+			garage_data = json.decode(v.garage_data),
+			zone_data = v.zone_data,
+		}
+		PropertiesTable[id] = Property:new(propertyData)
 
-			if v.shell == "mlo" and owner then
-				local property = PropertiesTable[id]
-				property:addMloDoorsAccess(owner)
+		if v.shell == "mlo" and owner then
+			local property = PropertiesTable[id]
+			property:addMloDoorsAccess(owner)
 
-				if has_access and #has_access > 0 then
-					for _, citizenId in ipairs(has_access) do
-						property:addMloDoorsAccess(citizenId)
-					end
+			if has_access and #has_access > 0 then
+				for _, citizenId in ipairs(has_access) do
+					property:addMloDoorsAccess(citizenId)
 				end
 			end
 		end
+	end
 
-		dbloaded = true
-	end, function(err)
-		print("Error querying properties: " .. err)
-	end)
+	dbloaded = true
 end)
 
 TD.Callback.Register("ps-housing:server:requestProperties", function()
@@ -132,29 +134,10 @@ function RegisterProperty(propertyData, preventEnter, source)
 	propertyData.garage_data = propertyData.garage_data or {}
 	propertyData.zone_data = propertyData.zone_data or {}
 
-	local cols =
-		"(owner_citizenid, street, region, description, has_access, extra_imgs, furnitures, for_sale, price, shell, apartment, door_data, garage_data, zone_data)"
-	local vals =
-		"(@owner_citizenid, @street, @region, @description, @has_access, @extra_imgs, @furnitures, @for_sale, @price, @shell, @apartment, @door_data, @garage_data, @zone_data)"
-
-	local id = MySQL.insert.await("INSERT INTO properties " .. cols .. " VALUES " .. vals, {
-		["@owner_citizenid"] = propertyData.owner or nil,
-		["@street"] = propertyData.street,
-		["@region"] = propertyData.region,
-		["@description"] = propertyData.description,
-		["@has_access"] = json.encode(propertyData.has_access),
-		["@extra_imgs"] = json.encode(propertyData.extra_imgs),
-		["@furnitures"] = json.encode(propertyData.furnitures),
-		["@for_sale"] = propertyData.for_sale ~= nil and propertyData.for_sale or 1,
-		["@price"] = propertyData.price or 0,
-		["@shell"] = propertyData.shell or "",
-		["@apartment"] = propertyData.apartment,
-		["@door_data"] = json.encode(
-			propertyData.shell == "mlo" and { count = #propertyData.door_data } or propertyData.door_data
-		),
-		["@garage_data"] = json.encode(propertyData.garage_data),
-		["@zone_data"] = json.encode(propertyData.zone_data),
-	})
+	local id = LegacyPropertyService.Create(propertyData)
+	if not id then
+		error("Failed to persist Housing property")
+	end
 
 	if source and propertyData.shell == "mlo" then
 		for index, door in ipairs(propertyData.door_data) do
@@ -267,20 +250,15 @@ TD.Callback.Register("ps-housing:cb:GetOwnedApartment", function(source, cid)
 		return nil
 	end
 
-	local success, result = pcall(function()
-		return MySQL.query.await(
-			'SELECT * FROM properties WHERE owner_citizenid = ? AND apartment IS NOT NULL AND apartment <> ""',
-			{ identifier }
-		)
-	end)
+	local success, result = pcall(LegacyPropertyService.GetOwnedApartment, identifier)
 
 	if not success then
 		print("Error querying database for owned apartment with identifier: " .. identifier .. " - " .. result)
 		return nil
 	end
 
-	if result and result[1] then
-		return result[1]
+	if result then
+		return result
 	end
 
 	return nil
