@@ -6,15 +6,29 @@ All notable TD-Housing TrueDane 3.0 migration changes are documented here.
 
 ### Runtime migration
 
-- Routed property weather sync enable/disable through `TD.Weather.SetSync` from `td_bridge` 0.6.5+.
-- Removed direct `qb-weathersync` events from the migrated Housing property lifecycle.
-- Kept weather sync optional and capability-gated so Housing can run without a configured weather provider.
-- Added CI regression checks preventing direct weather-provider events from returning to Housing runtime.
-- Routed property garage registration and QB house-garage client lifecycle through `TD.Garage` from `td_bridge` 0.6.4+.
-- Removed direct `qbx_garages` and `qb-garages` calls from the migrated Housing garage path.
+- Consolidated the Housing runtime on `td_bridge` 0.7.0+ for doorlock, garage, weather, spawn and appearance capabilities.
+- Routed property weather sync enable/disable through `TD.Weather.SetSync` and removed direct `qb-weathersync` calls from the migrated lifecycle.
+- Routed property garage registration and QB house-garage client lifecycle through `TD.Garage` and removed direct `qbx_garages` / `qb-garages` calls.
 - Added server-side ownership validation before a client-triggered property garage can be registered.
-- QBox garage access now uses the bridge's character-aware access callback instead of passing a character identifier as a framework group.
-- Added CI regression checks preventing direct garage-provider calls from returning to Housing runtime.
+- Routed spawn UI through `TD.Spawn`, capability-gating provider-specific starting-apartment selection instead of assuming QB Spawn behavior.
+- Routed wardrobe and first-character creation through `TD.Appearance`, removing direct clothing/appearance provider events from Housing core.
+- Isolated legacy appearance persistence in a repository and first-character orchestration in a service.
+- Isolated legacy apartment stash lookup/deletion in a repository and migration service.
+- Legacy stash imports now use `TD.Inventory.ImportLegacyStash`; source data is deleted only after a successful import.
+- Kept the legacy `qb-apartments:returnBucket` event only in the explicit compatibility module.
+- Expanded provider-boundary CI so direct garage, weather, spawn, clothing and inventory provider calls cannot return to migrated Housing core.
+
+### NUI
+
+- Repaired invalid Threlte modeler transform markup that prevented Svelte/TypeScript validation.
+- NUI typecheck and production build now complete successfully on the release-ready branch.
+- Generated `html` assets are rebuilt from the validated UI source.
+
+### Security
+
+- Client garage registration sends only the property ID; server-owned property state determines coordinates, owner access and provider payloads.
+- Legacy apartment migration no longer deletes source stash data before the destination import succeeds.
+- Existing server-authoritative storage removal and non-empty stash protection remain enforced.
 
 ## 0.1.0-dev - 2026-09-28
 
@@ -47,5 +61,4 @@ All notable TD-Housing TrueDane 3.0 migration changes are documented here.
 
 ### Compatibility
 
-The inherited `ps-housing:*` runtime remains internally for legacy client compatibility while the remaining client/NUI
-migration is completed. New TrueDane integrations must not depend on that namespace.
+The inherited `ps-housing:*` runtime remains internally for legacy client compatibility while the remaining client/runtime migration is completed. New TrueDane integrations must not depend on that namespace.
