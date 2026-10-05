@@ -7,6 +7,10 @@ local function changed(rows)
 	return (tonumber(rows) or 0) > 0
 end
 
+function LegacyPropertyService.WhenReady(callback)
+	return PropertyRepository.WhenReady(callback)
+end
+
 function LegacyPropertyService.LoadAll()
 	return PropertyRepository.GetAll()
 end
