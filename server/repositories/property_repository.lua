@@ -308,10 +308,7 @@ function PropertyRepository.UpdateApartment(propertyId, apartment)
 end
 
 function PropertyRepository.Delete(propertyId)
-	return MySQL.update.await(
-		"DELETE FROM properties WHERE property_id = ?",
-		{
-			propertyId,
-		}
-	)
+	return MySQL.update.await("DELETE FROM properties WHERE property_id = ?", {
+		propertyId,
+	})
 end
