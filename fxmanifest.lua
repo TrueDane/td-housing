@@ -33,6 +33,7 @@ client_scripts({
 	"client/client.lua",
 	"client/modeler.lua",
 	"client/integrations/wardrobe.lua",
+	"client/integrations/qbx_properties.lua",
 	"client/modules/property_capabilities.lua",
 	"client/migrate.lua",
 })
