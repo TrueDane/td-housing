@@ -192,3 +192,8 @@ lib.callback.register("ps-housing:cb:inventoryHasItems", function(source, stashI
 
 	return isEmpty ~= true
 end)
+
+-- Temporary compatibility for players leaving the legacy qb-apartments bucket during migration.
+RegisterNetEvent("qb-apartments:returnBucket", function()
+	SetPlayerRoutingBucket(source, 0)
+end)
