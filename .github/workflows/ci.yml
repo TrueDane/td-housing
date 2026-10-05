@@ -32,6 +32,7 @@ jobs:
             server/repositories/property_repository.lua
             server/repositories/legacy_appearance_repository.lua
             server/repositories/legacy_apartment_repository.lua
+            server/services/legacy_property_service.lua
             server/services/ownership_service.lua
             server/services/property_capability_service.lua
             server/services/property_mutation_service.lua
@@ -45,6 +46,7 @@ jobs:
             server/sv_property.lua
             client/client.lua
             client/integrations/wardrobe.lua
+            client/integrations/qbx_properties.lua
             client/modules/property_capabilities.lua
             tests/property_capabilities.lua
             tests/property_capability_service.lua
@@ -69,6 +71,7 @@ jobs:
           luac5.4 -p server/repositories/property_repository.lua
           luac5.4 -p server/repositories/legacy_appearance_repository.lua
           luac5.4 -p server/repositories/legacy_apartment_repository.lua
+          luac5.4 -p server/services/legacy_property_service.lua
           luac5.4 -p server/services/ownership_service.lua
           luac5.4 -p server/services/property_capability_service.lua
           luac5.4 -p server/services/property_mutation_service.lua
@@ -81,18 +84,20 @@ jobs:
           luac5.4 -p client/client.lua
           luac5.4 -p client/modeler.lua
           luac5.4 -p client/integrations/wardrobe.lua
+          luac5.4 -p client/integrations/qbx_properties.lua
           luac5.4 -p client/modules/property_capabilities.lua
           luac5.4 -p tests/property_capabilities.lua
           luac5.4 -p tests/property_capability_service.lua
           luac5.4 -p tests/property_mutation_service.lua
 
-      - name: Check migrated runtime provider boundaries
+      - name: Check migrated runtime boundaries
         run: |
           ! grep -nE "exports\[['\"]qb-core['\"]\]|QBCore\.Functions" shared/framework.lua client/client.lua client/modeler.lua server/server.lua
           ! grep -nE "exports\.(ox_target|ox_inventory)|exports\[['\"](?:qb-target|qb-radialmenu|qb-inventory)['\"]\]" shared/framework.lua
           ! grep -nE "qbx_garages|qb-garages|ps-housing:server:qbxRegisterHouse" client/cl_property.lua server/sv_property.lua
           ! grep -n "qb-weathersync" server/sv_property.lua
-          ! grep -nE "qb-spawn:|qb-clothing:|qb-clothes:|qb-inventory|qbx_garages|qb-garages|qb-weathersync" client/client.lua client/integrations/wardrobe.lua server/server.lua server/sv_property.lua
+          ! grep -nE "qb-spawn:|qb-clothing:|qb-clothes:|qb-inventory|qbx_garages|qb-garages|qb-weathersync|qbx_properties" client/client.lua client/integrations/wardrobe.lua server/server.lua server/sv_property.lua
+          ! grep -n "MySQL\." server/server.lua server/sv_property.lua
           grep -n "TD.Garage.RegisterHouse" server/sv_property.lua
           grep -n "propertyData.owner ~= citizenid" server/sv_property.lua
           grep -n "TD.Weather.SetSync" server/sv_property.lua
@@ -100,6 +105,8 @@ jobs:
           grep -n "TD.Appearance.OpenWardrobe" client/integrations/wardrobe.lua
           grep -n "TD.Appearance.CreateFirstCharacter" server/services/appearance_service.lua
           grep -n "TD.Inventory.ImportLegacyStash" server/services/legacy_apartment_migration_service.lua
+          grep -n "PropertyRepository" server/services/legacy_property_service.lua
+          grep -n "qbx_properties" client/integrations/qbx_properties.lua
 
       - name: Run property capability tests
         run: lua5.4 tests/property_capabilities.lua
