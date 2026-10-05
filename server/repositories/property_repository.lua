@@ -7,6 +7,10 @@ local function encode(value)
 	return json.encode(value or {})
 end
 
+function PropertyRepository.WhenReady(callback)
+	return MySQL.ready(callback)
+end
+
 function PropertyRepository.GetAll()
 	return MySQL.query.await("SELECT * FROM properties") or {}
 end
@@ -304,7 +308,10 @@ function PropertyRepository.UpdateApartment(propertyId, apartment)
 end
 
 function PropertyRepository.Delete(propertyId)
-	return MySQL.update.await("DELETE FROM properties WHERE property_id = ?", {
-		propertyId,
-	})
+	return MySQL.update.await(
+		"DELETE FROM properties WHERE property_id = ?",
+		{
+			propertyId,
+		}
+	)
 end
