@@ -13,6 +13,9 @@ for index = 1, #requiredDoorCapabilities do
     end
 end
 
+local AppearanceService = TDHousing.AppearanceService
+local LegacyApartmentMigrationService = TDHousing.LegacyApartmentMigrationService
+
 local dbloaded = false
 MySQL.ready(function()
     MySQL.query('SELECT * FROM properties', {}, function(result)
@@ -88,6 +91,38 @@ local function findOnlineSourceByIdentifier(identifier)
     return nil
 end
 
+local function ensureFirstCharacter(playerSource, identifier)
+    local success, status, message = AppearanceService.EnsureFirstCharacter(playerSource, identifier)
+
+    if success ~= true then
+        Debug(
+            ("Unable to ensure character appearance for %s (%s): %s"):format(
+                tostring(identifier),
+                status or "UNKNOWN_ERROR",
+                message or "Unknown appearance error"
+            )
+        )
+    end
+
+    return success, status
+end
+
+local function migrateLegacyApartmentStash(identifier, propertyId)
+    local success, status, message = LegacyApartmentMigrationService.MigrateStash(identifier, propertyId)
+
+    if success ~= true then
+        Debug(
+            ("Unable to migrate legacy apartment stash for %s (%s): %s"):format(
+                tostring(identifier),
+                status or "UNKNOWN_ERROR",
+                message or "Unknown migration error"
+            )
+        )
+    end
+
+    return success, status
+end
+
 function RegisterProperty(propertyData, preventEnter, source)
     propertyData.owner = propertyData.owner or nil
     propertyData.has_access = propertyData.has_access or {}
@@ -96,7 +131,7 @@ function RegisterProperty(propertyData, preventEnter, source)
     propertyData.door_data = propertyData.door_data or {}
     propertyData.garage_data = propertyData.garage_data or {}
     propertyData.zone_data = propertyData.zone_data or {}
-    
+
     local cols = "(owner_citizenid, street, region, description, has_access, extra_imgs, furnitures, for_sale, price, shell, apartment, door_data, garage_data, zone_data)"
     local vals = "(@owner_citizenid, @street, @region, @description, @has_access, @extra_imgs, @furnitures, @for_sale, @price, @shell, @apartment, @door_data, @garage_data, @zone_data)"
 
@@ -168,6 +203,7 @@ function RegisterProperty(propertyData, preventEnter, source)
             print("Error: Player not found for citizen ID " .. tostring(propertyData.owner))
             return
         end
+
         local property = Property.Get(id)
         if not property then
             print("Error: Property not found for ID " .. id)
@@ -177,25 +213,15 @@ function RegisterProperty(propertyData, preventEnter, source)
         property:PlayerEnter(src)
 
         Wait(1000)
+        ensureFirstCharacter(src, propertyData.owner)
 
-        local query = "SELECT skin FROM playerskins WHERE citizenid = ?"
-        local result = MySQL.Sync.fetchAll(query, {propertyData.owner})
+        Framework[Config.Notify].Notify(
+            src,
+            "Open radial menu for furniture menu and place down your stash and clothing locker.",
+            "info"
+        )
 
-        if result and result[1] then
-            Debug("Player: " .. propertyData.owner .. " skin already exists!")
-        else
-            TriggerClientEvent("qb-clothes:client:CreateFirstCharacter", src)
-            Debug("Player: " .. propertyData.owner .. " is creating a new character!")
-        end
-
-        Framework[Config.Notify].Notify(src, "Open radial menu for furniture menu and place down your stash and clothing locker.", "info")
-
-        -- This will create the stash for the apartment and migrate the items from the old apartment stash if applicable
-        if GetResourceState('qb-inventory') == 'started' then
-            TriggerEvent("ps-housing:server:createApartmentStash", propertyData.owner, id)
-        else
-            print("Error: qb-inventory is not started")
-        end
+        migrateLegacyApartmentStash(propertyData.owner, id)
     end
 
     return id
@@ -211,7 +237,7 @@ local function getMainDoor(propertyId, doorIndex, isShell)
             coords = property.propertyData.door_data
         }
     end
-    
+
     local id = ('ps_mloproperty%s_%s'):format(propertyId, doorIndex)
     local door = TD.Door.Get(id)
 
@@ -262,12 +288,12 @@ AddEventHandler("ps-housing:server:updateProperty", function(type, property_id, 
 end)
 
 AddEventHandler("onResourceStart", function(resourceName) -- Used for when the resource is restarted while in game
-	if (GetCurrentResourceName() == resourceName) then
+    if GetCurrentResourceName() == resourceName then
         while not dbloaded do
             Wait(100)
         end
         TriggerClientEvent('ps-housing:client:initialiseProperties', -1, PropertiesTable)
-	end 
+    end
 end)
 
 RegisterNetEvent("ps-housing:server:createNewApartment", function(aptLabel)
@@ -298,7 +324,6 @@ RegisterNetEvent("ps-housing:server:createNewApartment", function(aptLabel)
     RegisterProperty(propertyData)
 end)
 
--- we show the character creator if they spawn without starting appartment and doesn't have skin set
 AddEventHandler("td_bridge:server:playerLoaded", function(playerSource)
     if Config.StartingApartment then
         return
@@ -309,73 +334,15 @@ AddEventHandler("td_bridge:server:playerLoaded", function(playerSource)
     if not src then
         return
     end
+
     local citizenid = GetCitizenid(src)
-    local query = "SELECT skin FROM playerskins WHERE citizenid = ?"
-    
-    local success, result = pcall(function()
-        return MySQL.Sync.fetchAll(query, {citizenid})
-    end)
 
-    if not success then
-        print("Error querying database for player skin: " .. result)
-        return
-    end
-
-    if result and result[1] then
-        Debug("Player: " .. citizenid .. " skin already exists!")
-    else
-        TriggerClientEvent("qb-clothes:client:CreateFirstCharacter", src)
-        Debug("Player: " .. citizenid .. " is creating a new character!")
+    if citizenid then
+        ensureFirstCharacter(src, citizenid)
     end
 end)
 
--- Creates apartment stash
--- If player has an existing apartment from qb-apartments, it will transfer the items over to the new apartment stash
-RegisterNetEvent("ps-housing:server:createApartmentStash", function(citizenId, propertyId)
-    local stashId = string.format("property_%s", propertyId)
-
-    -- Check for existing apartment and corresponding stash
-    local query = lib.checkDependency('qb-inventory', '2.0.0') and 'SELECT items, identifier FROM inventories WHERE identifier' or 'SELECT items, stash FROM stashitems WHERE stash'
-    local success, result = pcall(function()
-        return MySQL.query.await(('%s IN (SELECT name FROM apartments WHERE citizenid = ?)'):format(query), { citizenId })
-    end)
-
-    if not success then
-        print("Error querying database for existing apartment stash: " .. result)
-        return
-    end
-
-    local items = {}
-    if result[1] ~= nil then
-        items = json.decode(result[1].items)
-
-        -- Delete the old apartment stash as it is no longer needed
-        local deleteSuccess, deleteResult = pcall(function()
-            MySQL.Async.execute('DELETE FROM stashitems WHERE stash = ?', { result[1].identifier or result[1].stash })
-        end)
-
-        if not deleteSuccess then
-            print("Error deleting old apartment stash: " .. deleteResult)
-            return
-        end
-    end
-
-    -- This will create the stash for the apartment (without requiring player to have first opened and placed item in it)
-    local saveSuccess, saveResult = pcall(function()
-        TriggerEvent('qb-inventory:server:SaveStashItems', stashId, items)
-    end)
-
-    if not saveSuccess then
-        print("Error saving new apartment stash: " .. saveResult)
-    end
-end)
-
-RegisterNetEvent('qb-apartments:returnBucket', function()
-    local src = source
-    SetPlayerRoutingBucket(src, 0)
-end)
-
-AddEventHandler("ps-housing:server:addTenantToApartment", function (data)
+AddEventHandler("ps-housing:server:addTenantToApartment", function(data)
     local apartment = data.apartment
     local targetSrc = tonumber(data.targetSrc)
     local realtorSrc = data.realtorSrc
@@ -422,8 +389,12 @@ AddEventHandler("ps-housing:server:addTenantToApartment", function (data)
 
         Framework[Config.Logs].SendLog("Creating new apartment for " .. GetPlayerName(targetSrc) .. " in " .. newApartment.label)
 
-        Framework[Config.Notify].Notify(targetSrc, "Your apartment is now at "..apartment, "success")
-        Framework[Config.Notify].Notify(realtorSrc, "You have added " .. (targetPlayer.name or targetCitizenid) .. " to apartment " .. apartment, "success")
+        Framework[Config.Notify].Notify(targetSrc, "Your apartment is now at " .. apartment, "success")
+        Framework[Config.Notify].Notify(
+            realtorSrc,
+            "You have added " .. (targetPlayer.name or targetCitizenid) .. " to apartment " .. apartment,
+            "success"
+        )
 
         RegisterProperty(propertyData, true)
 
@@ -481,4 +452,3 @@ function GetCharName(src)
 
     return player.name
 end
-
