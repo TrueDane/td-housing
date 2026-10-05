@@ -297,15 +297,8 @@
 			</PerspectiveCamera>
 			<T.Mesh
 				bind:ref={mesh}
-				position.x={$objectPosition.x}
-				position.y={$objectPosition.y}
-				position.z={$objectPosition.z}
-				quaternion={5}
 				geometry={new BoxGeometry(0, 0, 0)}
 				material={new MeshStandardMaterial()}
-				rotation.x={$objectEuler.x}
-				rotation.y={$objectEuler.y}
-				rotation.z={$objectEuler.z}
 			>
 				<TransformControls
 					{mode}
