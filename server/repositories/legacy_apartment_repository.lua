@@ -23,6 +23,10 @@ function LegacyApartmentRepository.FindStash(identifier)
     end
 
     local success, result = pcall(function()
+        if not tableExists("apartments") then
+            return nil
+        end
+
         if tableExists("inventories") then
             local rows = MySQL.query.await(
                 [[
