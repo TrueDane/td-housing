@@ -30,13 +30,19 @@ jobs:
             server/legacy_registration_guard.lua
             server/legacy_registration_restore.lua
             server/repositories/property_repository.lua
+            server/repositories/legacy_appearance_repository.lua
+            server/repositories/legacy_apartment_repository.lua
             server/services/ownership_service.lua
             server/services/property_capability_service.lua
             server/services/property_mutation_service.lua
             server/services/legacy_guard_service.lua
+            server/services/appearance_service.lua
+            server/services/legacy_apartment_migration_service.lua
             server/modules/property_capabilities.lua
             server/modules/public_api.lua
             server/modules/legacy_compatibility.lua
+            server/server.lua
+            server/sv_property.lua
             client/client.lua
             client/integrations/wardrobe.lua
             client/modules/property_capabilities.lua
@@ -61,10 +67,14 @@ jobs:
           luac5.4 -p server/legacy_registration_guard.lua
           luac5.4 -p server/legacy_registration_restore.lua
           luac5.4 -p server/repositories/property_repository.lua
+          luac5.4 -p server/repositories/legacy_appearance_repository.lua
+          luac5.4 -p server/repositories/legacy_apartment_repository.lua
           luac5.4 -p server/services/ownership_service.lua
           luac5.4 -p server/services/property_capability_service.lua
           luac5.4 -p server/services/property_mutation_service.lua
           luac5.4 -p server/services/legacy_guard_service.lua
+          luac5.4 -p server/services/appearance_service.lua
+          luac5.4 -p server/services/legacy_apartment_migration_service.lua
           luac5.4 -p server/modules/property_capabilities.lua
           luac5.4 -p server/modules/public_api.lua
           luac5.4 -p server/modules/legacy_compatibility.lua
@@ -82,9 +92,14 @@ jobs:
           ! grep -nE "exports\.(ox_target|ox_inventory)|exports\[['\"](?:qb-target|qb-radialmenu|qb-inventory)['\"]\]" shared/framework.lua
           ! grep -nE "qbx_garages|qb-garages|ps-housing:server:qbxRegisterHouse" client/cl_property.lua server/sv_property.lua
           ! grep -n "qb-weathersync" server/sv_property.lua
+          ! grep -nE "qb-spawn:|qb-clothing:|qb-clothes:|qb-inventory|qbx_garages|qb-garages|qb-weathersync" client/client.lua client/integrations/wardrobe.lua server/server.lua server/sv_property.lua
           grep -n "TD.Garage.RegisterHouse" server/sv_property.lua
           grep -n "propertyData.owner ~= citizenid" server/sv_property.lua
           grep -n "TD.Weather.SetSync" server/sv_property.lua
+          grep -n "TD.Spawn.Open" client/client.lua
+          grep -n "TD.Appearance.OpenWardrobe" client/integrations/wardrobe.lua
+          grep -n "TD.Appearance.CreateFirstCharacter" server/services/appearance_service.lua
+          grep -n "TD.Inventory.ImportLegacyStash" server/services/legacy_apartment_migration_service.lua
 
       - name: Run property capability tests
         run: lua5.4 tests/property_capabilities.lua
