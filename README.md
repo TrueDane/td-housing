@@ -18,7 +18,7 @@ External resources must integrate through the TD-Housing public API instead of r
 
 ## Architecture
 
-The TrueDane 3.0 integration path is:
+The TrueDane 3.0 path follows these boundaries:
 
 ```text
 External product
@@ -29,9 +29,13 @@ External product
     -> in-memory property state / client synchronization
 ```
 
-Provider access belongs behind `td_bridge`. The migrated runtime uses normalized bridge capabilities for player/framework state, callbacks, notifications, target/radial interactions, inventory/stashes, doorlocks, garages, weather sync, spawn and appearance/wardrobe functionality.
+Framework and provider access is isolated behind `td_bridge` or explicit integration adapters. New TrueDane code must use stable TrueDane boundaries instead of calling framework/provider resources directly.
 
-Legacy `ps-housing:*` events remain an internal compatibility surface while the inherited runtime is being retired. They are not a supported integration API for other TrueDane resources.
+The migrated runtime now routes player lifecycle, notifications, target/radial, inventory/stash state, MLO door lifecycle, garage integration, weather sync, spawn, wardrobe/appearance and first-character compatibility through `td_bridge`.
+
+Legacy apartment persistence is isolated behind repository/service boundaries. Runtime property files do not access MySQL directly.
+
+Legacy `ps-housing:*` events remain internally for compatibility with the inherited client runtime, but they are not the public integration contract for other TrueDane resources.
 
 ## Dependencies
 
@@ -43,16 +47,19 @@ Required runtime resources:
 - `fivem-freecam`;
 - a doorlock provider selected in `td_bridge` (`ox_doorlock` or `qb_doorlock`).
 
-Optional Housing features use explicitly selected `td_bridge` providers:
+Optional capabilities depend on configured bridge providers:
 
 - garage: `qbx_garages` or `qb_garages`;
-- weather: `qbx_weathersync` or `qb_weathersync`;
-- spawn: `qbx_spawn` or `qb_spawn`;
-- appearance: `illenium_appearance` or `qb_clothing`.
+- weather sync: compatible QB/QBX weather provider;
+- spawn: configured spawn provider;
+- appearance/wardrobe: configured appearance provider;
+- legacy apartment stash migration: supported inventory provider.
 
-The selected provider resources must be available before their capabilities are used.
+Provider-specific resources must start before TD-Housing when selected.
 
 ## Public server API
+
+The TrueDane integration contract exposes:
 
 ```lua
 exports['td_housing']:RegisterProperty(propertyData, preventEnter, playerSource)
@@ -72,14 +79,18 @@ exports['td_housing']:RevokeAccess(propertyId, identifier)
 
 ### Access roles
 
+Supported public access roles are:
+
 - `owner` — derived from property ownership;
-- `resident` — tenant/trusted resident access;
+- `resident` — intended for tenants and other trusted residents;
 - `guest` — door access without resident feature-management permissions;
 - `visitor` — derived for players without access.
 
 TD-Realtor rentals use `resident` access without transferring ownership.
 
 ### Property settings
+
+`ApplyPropertySettings` supports the generic capability configuration used by Realtor and future products:
 
 ```lua
 {
@@ -95,29 +106,24 @@ TD-Realtor rentals use `resident` access without transferring ownership.
 }
 ```
 
-All protected state changes are validated server-side. Client state is never authoritative.
+All protected state changes are validated server-side. Client state must not be treated as authoritative.
 
 ## Provider boundaries
 
-### Garage
+TD-Housing does not call configured framework/provider resources directly from the migrated runtime.
 
-The client sends only the property ID. TD-Housing resolves authoritative garage data and ownership server-side before calling `TD.Garage.RegisterHouse`. Direct `qbx_garages` / `qb-garages` calls are rejected by CI on the migrated runtime path.
+Examples:
 
-### Weather
+```lua
+TD.Garage.RegisterHouse(source, garageId, garageData)
+TD.Weather.SetSync(source, enabled)
+TD.Spawn.Open(characterData)
+TD.Appearance.OpenWardrobe()
+TD.Appearance.CreateFirstCharacter(source)
+TD.Inventory.ImportLegacyStash(...)
+```
 
-Shell entry/exit uses `TD.Weather.SetSync`. Weather integration is capability-gated and remains optional.
-
-### Spawn
-
-Housing uses `TD.Spawn.Open`. Starting-apartment selection uses `TD.Spawn.OpenStartingApartments` only when the selected provider advertises that capability. Providers without that portable feature fall back to their generic spawn flow instead of receiving fabricated provider calls.
-
-### Appearance and wardrobe
-
-Wardrobes use `TD.Appearance.OpenWardrobe`; first-character creation uses `TD.Appearance.CreateFirstCharacter`. Housing no longer calls `qb-clothing`, `qb-clothes` or Illenium events directly on the migrated path.
-
-### Legacy apartment stash migration
-
-Legacy QB apartment stash lookup/deletion is isolated in a repository and migration service. Item import goes through `TD.Inventory.ImportLegacyStash` and the old stash is deleted only after a successful import, preventing the previous delete-before-save data-loss risk.
+The `qbx_properties` compatibility hook is isolated in a named client integration instead of the Housing core.
 
 ## Database
 
@@ -134,24 +140,28 @@ migrations/001_property_capabilities.sql
 migrations/002_remove_framework_owner_fk.sql
 ```
 
-TD-Housing owns the `properties` table. Other TrueDane resources must use the public API rather than joining or mutating Housing tables directly.
+TD-Housing owns the `properties` table. Other TrueDane resources must not join against or mutate that table directly; use the public API instead.
+
+Database access in the migrated server runtime is centralized in repositories. Legacy-compatible mutation flows are routed through services instead of issuing SQL directly from `server.lua` or `sv_property.lua`.
 
 Existing property data must be preserved during migration.
 
 ## Suggested start order
 
+A typical development order is:
+
 ```cfg
 ensure oxmysql
 ensure ox_lib
 
-# Framework and selected providers
+# Framework/providers selected by td_bridge
 ensure qbx_core
 # ensure ox_inventory
 # ensure ox_target
-# ensure ox_doorlock
-# ensure qbx_garages
-# ensure qbx_spawn
-# ensure illenium-appearance
+
+# Optional providers used by Housing
+ensure ox_doorlock
+ensure qbx_garages
 
 ensure td_bridge
 ensure fivem-freecam
@@ -169,74 +179,63 @@ Adjust provider names to the server configuration.
 
 The repository CI verifies:
 
-- StyLua formatting for migrated TrueDane Lua;
+- StyLua formatting for migrated Lua;
 - Lua 5.4 syntax;
-- runtime provider-boundary rules;
+- provider-boundary rules for the migrated runtime;
 - server-side garage ownership validation;
-- property capability and mutation tests;
-- stable stash IDs and non-empty stash protection;
+- repository/service persistence boundaries;
+- property capability tests;
+- property capability service tests, including stable stash IDs and safe removal;
+- property mutation service tests;
 - NUI dependency installation;
-- NUI Svelte/TypeScript checks;
+- NUI typecheck;
 - NUI production build.
 
 A green CI does not replace an in-game smoke test.
 
-## Remaining inherited migration debt
-
-The provider migration is consolidated, but these inherited surfaces still require deliberate cleanup or final validation before a stable release:
-
-- legacy internal `ps-housing:*` event namespace;
-- remaining inherited direct property SQL in legacy lifecycle code must continue moving into repositories/services;
-- `qbx_properties` compatibility detection remains an isolated product compatibility path;
-- final TrueDane/Nexgen visual polish of the inherited furniture/modeler NUI;
-- real FiveM smoke testing and Resmon measurements.
-
-Do not copy these compatibility surfaces into new TrueDane code.
-
 ## Dev-server smoke test
 
-At minimum test:
+Before release, test at minimum:
 
 1. clean server/resource startup;
 2. existing properties load after restart;
-3. shell property entry/exit and weather restore;
+3. shell property entry/exit;
 4. MLO door access;
 5. owner access;
 6. `resident` access;
 7. guest access restrictions;
 8. stash placement/opening;
-9. non-empty stash removal rejection;
-10. stash contents remain attached after restart/reordering;
+9. verify a non-empty stash cannot be removed;
+10. verify stash contents remain attached to the same furniture after restart/reordering;
 11. wardrobe placement/use;
 12. furniture modes `player`, `fixed` and `disabled`;
-13. garage registration/use;
-14. non-owner garage registration rejection;
-15. generic spawn flow;
-16. starting-apartment spawn flow for providers that support it;
-17. first-character appearance flow;
-18. legacy apartment stash migration without data loss;
-19. `RegisterProperty`;
-20. `SetOwner`;
-21. `UpdateShell`;
-22. `UpdateGarage`;
-23. `UpdateImages`;
-24. access grant/revoke persistence;
-25. restart persistence after mutations;
-26. TD-Realtor sale ownership transfer;
-27. TD-Realtor rental start/end flow.
+13. owner garage registration/use with the selected garage provider;
+14. verify a non-owner cannot register another property's garage;
+15. weather sync across shell entry/exit;
+16. spawn flow;
+17. first-character/appearance flow;
+18. `RegisterProperty`;
+19. `SetOwner`;
+20. `UpdateShell`;
+21. `UpdateGarage`;
+22. `UpdateImages`;
+23. access grant/revoke persistence;
+24. restart persistence after mutations;
+25. TD-Realtor sale ownership transfer;
+26. TD-Realtor rental start/end flow.
 
-Record real Resmon idle and active figures before release.
+Record Resmon idle and active figures before release.
 
 ## Development rules
 
-Before release:
+Before a release:
 
-- Lua must pass StyLua and Lua 5.4 syntax checks;
-- NUI must format/lint/typecheck/build as configured by the project;
-- new framework/provider access must use `td_bridge`;
+- migrated Lua must pass StyLua and Lua 5.4 syntax checks;
+- NUI must pass typecheck and production build;
+- new framework/provider access must use `td_bridge` or an approved isolated integration;
 - protected mutations must be server-authoritative;
 - database access for migrated domain logic belongs in repositories;
 - domain rules belong in services;
-- temporary debug/test commands must not ship;
+- temporary debug/test commands and release-preparation workflows must not ship;
 - README, CHANGELOG and migrations must match the release;
 - relevant in-game smoke tests and Resmon measurements must be recorded.
