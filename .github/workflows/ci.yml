@@ -108,6 +108,12 @@ jobs:
           grep -n "PropertyRepository" server/services/legacy_property_service.lua
           grep -n "qbx_properties" client/integrations/qbx_properties.lua
 
+      - name: Check release metadata
+        run: |
+          grep -n 'version("0.1.0")' fxmanifest.lua
+          grep -n 'td_bridge` 0.7.0+' README.md
+          test ! -e .github/workflows/format-release-ready.yml
+
       - name: Run property capability tests
         run: lua5.4 tests/property_capabilities.lua
 
