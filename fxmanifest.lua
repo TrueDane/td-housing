@@ -3,7 +3,7 @@ game("gta5")
 
 author("TrueDane Development")
 description("TrueDane 3.0 housing engine based on ps-housing")
-version("0.1.0-dev")
+version("0.1.0")
 repository("https://github.com/TrueDane/td-housing")
 td_repository("TrueDane/td-housing")
 
