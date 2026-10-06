@@ -6,6 +6,8 @@ local function notifyError(playerSource, errorCode)
 		PLAYER_NOT_INSIDE_PROPERTY = "Du skal være inde i boligen.",
 		STORAGE_ACCESS_DENIED = "Du har ikke adgang til boligens stash.",
 		STORAGE_NOT_FOUND = "Stashen blev ikke fundet.",
+		STORAGE_NOT_EMPTY = "Stashen skal være tom, før den kan fjernes.",
+		STORAGE_STATE_UNAVAILABLE = "Stashens indhold kunne ikke valideres.",
 		PROPERTY_MANAGE_FORBIDDEN = "Du må ikke ændre denne bolig.",
 		STORAGE_DISABLED = "Stash er deaktiveret i denne bolig.",
 		WARDROBE_DISABLED = "Garderobe er deaktiveret i denne bolig.",

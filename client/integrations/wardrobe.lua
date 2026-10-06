@@ -4,16 +4,9 @@ TDHousing.Wardrobe = TDHousing.Wardrobe or {}
 local Wardrobe = TDHousing.Wardrobe
 
 function Wardrobe.Open()
-	local provider = Config.Wardrobe and Config.Wardrobe.provider or "qb-clothing"
-
-	if provider == "qb-clothing" then
-		if GetResourceState("qb-clothing") ~= "started" then
-			return nil, "WARDROBE_PROVIDER_NOT_STARTED"
-		end
-
-		TriggerEvent("qb-clothing:client:openOutfitMenu")
-		return true
+	if not TD.HasCapability("appearance", "openWardrobe") then
+		return nil, "WARDROBE_PROVIDER_UNAVAILABLE"
 	end
 
-	return nil, "WARDROBE_PROVIDER_UNSUPPORTED"
+	return TD.Appearance.OpenWardrobe()
 end

@@ -141,7 +141,7 @@ Config.FurnitureTypes.storage = function(entity, propertyId, _, legacyId)
 			name = ("td_housing_storage_%s_%s"):format(propertyId, tostring(furnitureId)),
 			label = "Stash",
 			icon = "fas fa-box-open",
-			onSelect = function()
+			on_select = function()
 				TriggerServerEvent("td_housing:server:openStorage", propertyId, furnitureId)
 			end,
 		},
@@ -161,11 +161,11 @@ Config.FurnitureTypes.clothing = function(entity, propertyId)
 			name = ("td_housing_wardrobe_%s"):format(propertyId),
 			label = "Garderobe",
 			icon = "fas fa-shirt",
-			canInteract = function()
+			can_interact = function()
 				local property = Property.Get(propertyId)
 				return property ~= nil and property.inProperty == true
 			end,
-			onSelect = function()
+			on_select = function()
 				local property = Property.Get(propertyId)
 
 				if not property or property.inProperty ~= true then

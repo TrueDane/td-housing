@@ -22,7 +22,7 @@ local function getJobState(playerSource)
 		return nil, false
 	end
 
-	return job.name, job.onduty == true or job.onDuty == true
+	return job.name, job.is_on_duty == true or job.onduty == true or job.onDuty == true
 end
 
 local function canManageAccess(playerSource, property)
@@ -180,7 +180,20 @@ lib.callback.register("ps-housing:cb:inventoryHasItems", function(source, stashI
 		return true
 	end
 
-	-- Until td_bridge exposes a provider-neutral stash-content query, be conservative:
-	-- legacy clients may not delete a storage point based on client-supplied inventory state.
-	return true
+	if type(TD.Inventory.IsEmpty) ~= "function" then
+		return true
+	end
+
+	local isEmpty = TD.Inventory.IsEmpty(stashId)
+
+	if isEmpty == nil then
+		return true
+	end
+
+	return isEmpty ~= true
+end)
+
+-- Temporary compatibility for players leaving the legacy qb-apartments bucket during migration.
+RegisterNetEvent("qb-apartments:returnBucket", function()
+	SetPlayerRoutingBucket(source, 0)
 end)

@@ -26,18 +26,31 @@ jobs:
             config/shared.lua
             config/client.lua
             shared/property_capabilities.lua
+            shared/framework.lua
             server/legacy_registration_guard.lua
             server/legacy_registration_restore.lua
             server/repositories/property_repository.lua
+            server/repositories/legacy_appearance_repository.lua
+            server/repositories/legacy_apartment_repository.lua
+            server/services/legacy_property_service.lua
             server/services/ownership_service.lua
             server/services/property_capability_service.lua
+            server/services/property_mutation_service.lua
             server/services/legacy_guard_service.lua
+            server/services/appearance_service.lua
+            server/services/legacy_apartment_migration_service.lua
             server/modules/property_capabilities.lua
             server/modules/public_api.lua
             server/modules/legacy_compatibility.lua
+            server/server.lua
+            server/sv_property.lua
+            client/client.lua
             client/integrations/wardrobe.lua
+            client/integrations/qbx_properties.lua
             client/modules/property_capabilities.lua
             tests/property_capabilities.lua
+            tests/property_capability_service.lua
+            tests/property_mutation_service.lua
 
       - name: Install Lua 5.4
         run: |
@@ -50,23 +63,67 @@ jobs:
           luac5.4 -p config/shared.lua
           luac5.4 -p config/client.lua
           luac5.4 -p shared/property_capabilities.lua
+          luac5.4 -p shared/framework.lua
+          luac5.4 -p server/server.lua
+          luac5.4 -p server/sv_property.lua
           luac5.4 -p server/legacy_registration_guard.lua
           luac5.4 -p server/legacy_registration_restore.lua
           luac5.4 -p server/repositories/property_repository.lua
+          luac5.4 -p server/repositories/legacy_appearance_repository.lua
+          luac5.4 -p server/repositories/legacy_apartment_repository.lua
+          luac5.4 -p server/services/legacy_property_service.lua
           luac5.4 -p server/services/ownership_service.lua
           luac5.4 -p server/services/property_capability_service.lua
+          luac5.4 -p server/services/property_mutation_service.lua
           luac5.4 -p server/services/legacy_guard_service.lua
+          luac5.4 -p server/services/appearance_service.lua
+          luac5.4 -p server/services/legacy_apartment_migration_service.lua
           luac5.4 -p server/modules/property_capabilities.lua
           luac5.4 -p server/modules/public_api.lua
           luac5.4 -p server/modules/legacy_compatibility.lua
+          luac5.4 -p client/client.lua
+          luac5.4 -p client/modeler.lua
           luac5.4 -p client/integrations/wardrobe.lua
+          luac5.4 -p client/integrations/qbx_properties.lua
           luac5.4 -p client/modules/property_capabilities.lua
           luac5.4 -p tests/property_capabilities.lua
+          luac5.4 -p tests/property_capability_service.lua
+          luac5.4 -p tests/property_mutation_service.lua
+
+      - name: Check migrated runtime boundaries
+        run: |
+          ! grep -nE "exports\[['\"]qb-core['\"]\]|QBCore\.Functions" shared/framework.lua client/client.lua client/modeler.lua server/server.lua
+          ! grep -nE "exports\.(ox_target|ox_inventory)|exports\[['\"](?:qb-target|qb-radialmenu|qb-inventory)['\"]\]" shared/framework.lua
+          ! grep -nE "qbx_garages|qb-garages|ps-housing:server:qbxRegisterHouse" client/cl_property.lua server/sv_property.lua
+          ! grep -n "qb-weathersync" server/sv_property.lua
+          ! grep -nE "qb-spawn:|qb-clothing:|qb-clothes:|qb-inventory|qbx_garages|qb-garages|qb-weathersync|qbx_properties" client/client.lua client/integrations/wardrobe.lua server/server.lua server/sv_property.lua
+          ! grep -n "MySQL\." server/server.lua server/sv_property.lua
+          grep -n "TD.Garage.RegisterHouse" server/sv_property.lua
+          grep -n "propertyData.owner ~= citizenid" server/sv_property.lua
+          grep -n "TD.Weather.SetSync" server/sv_property.lua
+          grep -n "TD.Spawn.Open" client/client.lua
+          grep -n "TD.Appearance.OpenWardrobe" client/integrations/wardrobe.lua
+          grep -n "TD.Appearance.CreateFirstCharacter" server/services/appearance_service.lua
+          grep -n "TD.Inventory.ImportLegacyStash" server/services/legacy_apartment_migration_service.lua
+          grep -n "PropertyRepository" server/services/legacy_property_service.lua
+          grep -n "qbx_properties" client/integrations/qbx_properties.lua
+
+      - name: Check release metadata
+        run: |
+          grep -n 'version("0.1.0")' fxmanifest.lua
+          grep -n 'td_bridge` 0.7.0+' README.md
+          test ! -e .github/workflows/format-release-ready.yml
 
       - name: Run property capability tests
         run: lua5.4 tests/property_capabilities.lua
 
-  legacy-nui:
+      - name: Run property capability service tests
+        run: lua5.4 tests/property_capability_service.lua
+
+      - name: Run property mutation tests
+        run: lua5.4 tests/property_mutation_service.lua
+
+  nui:
     runs-on: ubuntu-latest
 
     defaults:
@@ -87,8 +144,8 @@ jobs:
       - name: Install NUI dependencies
         run: npm ci
 
-      - name: Report legacy NUI typecheck debt
-        run: npm run check || echo '::warning::Upstream legacy NUI does not currently typecheck; final TrueDane NUI migration remains required.'
+      - name: Check NUI types
+        run: npm run check
 
-      - name: Report legacy NUI build debt
-        run: npm run build || echo '::warning::Upstream legacy NUI source does not currently build cleanly; checked-in html remains the temporary dev UI.'
+      - name: Build NUI
+        run: npm run build

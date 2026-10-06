@@ -3,495 +3,312 @@ Framework = {}
 PoliceJobs = {}
 RealtorJobs = {}
 
--- Convert config table to usable keys
-for i = 1, #Config.PoliceJobNames do
-    PoliceJobs[Config.PoliceJobNames[i]] = true
+for index = 1, #Config.PoliceJobNames do
+	PoliceJobs[Config.PoliceJobNames[index]] = true
 end
 
-for i = 1, #Config.RealtorJobNames do
-    RealtorJobs[Config.RealtorJobNames[i]] = true
+for index = 1, #Config.RealtorJobNames do
+	RealtorJobs[Config.RealtorJobNames[index]] = true
+end
+
+local function notificationType(notificationType)
+	if notificationType == "primary" then
+		return "inform"
+	end
+
+	return notificationType
 end
 
 if IsDuplicityVersion() then
-    Framework.ox = {}
-    Framework.qb = {}
+	local serverAdapter = {}
 
-    function Framework.ox.Notify(src, message, type)
-        type = type == "inform" and "info" or type
-        TriggerClientEvent("ox_lib:notify", src, {title="Property", description=message, type=type})
-    end
+	function serverAdapter.Notify(playerSource, message, messageType)
+		return TD.Notify(playerSource, {
+			title = "TD-Housing",
+			description = message,
+			type = notificationType(messageType) or "inform",
+		})
+	end
 
-    function Framework.qb.Notify(src, message, type)
-        type = type == "info" and "primary" or type
-        TriggerClientEvent('QBCore:Notify', src, message, type)
-    end
+	function serverAdapter.RegisterInventory(stashId, label, stashConfig)
+		stashConfig = stashConfig or {}
 
-    function Framework.ox.RegisterInventory(stash, label, stashConfig)
-        exports.ox_inventory:RegisterStash(stash, label, stashConfig.slots, stashConfig.maxweight, nil)
-    end
+		return TD.Inventory.RegisterStash(stashId, {
+			label = label,
+			slots = stashConfig.slots,
+			max_weight = stashConfig.maxWeight or stashConfig.maxweight,
+		})
+	end
 
-    function Framework.qb.RegisterInventory(stash, label, stashConfig)
-        -- Used for ox_inventory compat
-    end
+	function serverAdapter.SendLog(message)
+		if Config.EnableLogs then
+			print(("[TD-Housing] %s"):format(message))
+		end
+	end
 
-    function Framework.qb.SendLog(message)
-        if Config.EnableLogs then
-            TriggerEvent('qb-log:server:CreateLog', 'pshousing', 'Housing System', 'blue', message)
-        end
-    end
-    
-    function Framework.ox.SendLog(message)
-            -- noop
-    end
+	Framework.td = serverAdapter
+	Framework.qb = serverAdapter
+	Framework.ox = serverAdapter
 
-    return
+	return
 end
 
-local function hasApartment(apts)
-    for propertyId, _  in pairs(apts) do
-        local property = PropertiesTable[propertyId]
-        if property.owner then
-            return true
-        end
-    end
+local entityTargetNames = {}
 
-    return false
+local function currentJob()
+	return TD.Player.GetJob()
 end
 
-Framework.qb = {
-    Notify = function(message, type)
-        type = type == "info" and "primary" or type
-        TriggerEvent('QBCore:Notify', message, type)
-    end,
+local function isAllowedJob(jobNames, minimumGrade, requireDuty)
+	local job = currentJob()
 
-    AddEntrance = function(coords, size, heading, propertyId, enter, raid, showcase, showData, targetName)
-        local property_id = propertyId
-        exports["qb-target"]:AddBoxZone(
-            targetName,
-            vector3(coords.x, coords.y, coords.z),
-            size.x,
-            size.y,
-            {
-                name = targetName,
-                heading = heading,
-                debugPoly = Config.DebugMode,
-                minZ = coords.z - 1.5,
-                maxZ = coords.z + 2.0,
-            },
-            {
-                options = {
-                    {
-                        label = "Enter Property",
-                        icon = "fas fa-door-open",
-                        action = enter,
-                        canInteract = function()
-                            local property = Property.Get(property_id)
-                            return property.has_access or property.owner
-                        end,
-                    },
-                    {
-                        label = "Showcase Property",
-                        icon = "fas fa-eye",
-                        action = showcase,
-                        canInteract = function()
-                            local job = PlayerData.job
-                            local jobName = job.name
-                            local onDuty = job.onduty
-                            return RealtorJobs[jobName] and onDuty
-                        end,
-                    },
-                    {
-                        label = "Property Info",
-                        icon = "fas fa-circle-info",
-                        action = showData,
-                        canInteract = function()
-                            local job = PlayerData.job
-                            local jobName = job.name
-                            local onDuty = job.onduty
-                            return RealtorJobs[jobName] and onDuty
-                        end,
-                    },
-                    {
-                        label = "Ring Doorbell",
-                        icon = "fas fa-bell",
-                        action = enter,
-                        canInteract = function()
-                            local property = Property.Get(property_id)
-                            return not property.has_access and not property.owner
-                        end,
-                    },
-                    {
-                        label = "Raid Property",
-                        icon = "fas fa-building-shield",
-                        action = raid,
-                        canInteract = function()
-                            local job = PlayerData.job
-                            local jobName = job.name
-                            local gradeAllowed = tonumber(job.grade.level) >= Config.MinGradeToRaid
-                            local onDuty = job.onduty
+	if type(job) ~= "table" or not jobNames[job.name] then
+		return false
+	end
 
-                            return PoliceJobs[jobName] and gradeAllowed and onDuty
-                        end,
-                    },
-                },
-            }
-        )
+	if requireDuty and job.is_on_duty ~= true then
+		return false
+	end
 
-        return targetName
-    end,
+	if minimumGrade and (tonumber(job.grade) or 0) < minimumGrade then
+		return false
+	end
 
-    AddApartmentEntrance = function(coords, size, heading, apartment, enter, seeAll, seeAllToRaid, targetName)
-        exports['qb-target']:AddBoxZone(targetName, vector3(coords.x, coords.y, coords.z), size.x, size.y, {
-            name = targetName,
-            heading = heading,
-            debugPoly = Config.DebugMode,
-            minZ = coords.z - 1.0,
-            maxZ = coords.z + 2.0,
-        }, {
-            options = {
-                {
-                    label = "Enter Apartment",
-                    action = enter,
-                    icon = "fas fa-door-open",
-                    canInteract = function()
-                        local apartments = ApartmentsTable[apartment].apartments
-                        return hasApartment(apartments)
-                    end,
-                },
-                {
-                    label = "See all apartments",
-                    icon = "fas fa-circle-info",
-                    action = seeAll,
-                },
-                {
-                    label = "Raid Apartment",
-                    action = seeAllToRaid,
-                    icon = "fas fa-building-shield",
-                    canInteract = function()
-                        local job = PlayerData.job
-                        local jobName = job.name
-                        local gradeAllowed = tonumber(job.grade.level) >= Config.MinGradeToRaid
-                        local onDuty = job.onduty
+	return true
+end
 
-                        return PoliceJobs[jobName] and gradeAllowed and onDuty
-                    end,
-                },
-            }
-        })
-    end,
+local function propertyHasAccess(propertyId)
+	local property = Property.Get(propertyId)
 
-    AddDoorZoneInside = function(coords, size, heading, leave, checkDoor)
-        exports["qb-target"]:AddBoxZone(
-            "shellExit",
-            vector3(coords.x, coords.y, coords.z),
-            size.x,
-            size.y,
-            {
-                name = "shellExit",
-                heading = heading,
-                debugPoly = Config.DebugMode,
-                minZ = coords.z - 2.0,
-                maxZ = coords.z + 1.0,
-            },
-            {
-                options = {
-                    {
-                        label = "Leave Property",
-                        action = leave,
-                        icon = "fas fa-right-from-bracket",
-                    },
-                    {
-                        label = "Check Door",
-                        action = checkDoor,
-                        icon = "fas fa-bell",
-                    },
-                },
-            }
-        )
+	return property ~= nil and (property.has_access == true or property.owner == true)
+end
 
-        return "shellExit"
-    end,
+local function apartmentHasOwnedUnit(apartment)
+	local apartmentData = ApartmentsTable[apartment]
 
-    AddDoorZoneInsideTempShell = function(coords, size, heading, leave)
-        exports["qb-target"]:AddBoxZone(
-            "shellExit",
-            vector3(coords.x, coords.y, coords.z),
-            size.x,
-            size.y,
-            {
-                name = "shellExit",
-                heading = heading,
-                debugPoly = Config.DebugMode,
-                minZ = coords.z - 2.0,
-                maxZ = coords.z + 1.0,
-            },
-            {
-                options = {
-                    {
-                        label = "Leave",
-                        action = leave,
-                        icon = "fas fa-right-from-bracket",
-                    },
-                },
-            }
-        )
+	if not apartmentData or type(apartmentData.apartments) ~= "table" then
+		return false
+	end
 
-        return "shellExit"
-    end,
+	for propertyId in pairs(apartmentData.apartments) do
+		local property = PropertiesTable[propertyId]
 
-    RemoveTargetZone = function(targetName)
-        exports["qb-target"]:RemoveZone(targetName)
-    end,
+		if property and property.owner then
+			return true
+		end
+	end
 
-    AddRadialOption = function(id, label, icon, _, event, options)
-        exports['qb-radialmenu']:AddOption({
-            id = id,
-            title = label,
-            icon = icon,
-            type = 'client',
-            event = event,
-            shouldClose = true,
-            options = options
-        }, id)
-    end,
+	return false
+end
 
-    RemoveRadialOption = function(id)
-        exports['qb-radialmenu']:RemoveOption(id)
-    end,
+local clientAdapter = {}
 
-    AddTargetEntity = function (entity, label, icon, action)
-        exports["qb-target"]:AddTargetEntity(entity, {
-            options = {
-                {
-                    label = label,
-                    icon = icon,
-                    action = action,
-                },
-            },
-        })
-    end,
+function clientAdapter.Notify(message, messageType)
+	return TD.Notify({
+		title = "TD-Housing",
+		description = message,
+		type = notificationType(messageType) or "inform",
+	})
+end
 
-    RemoveTargetEntity = function (entity)
-        exports["qb-target"]:RemoveTargetEntity(entity)
-    end,
-    inventoryHasItems = function(name)
-        return lib.callback.await('ps-housing:cb:inventoryHasItems', 10, name)
-    end,
-    OpenInventory = function (stash, stashConfig, propertyId)
-        if lib.checkDependency('qb-inventory', '2.0.0') then
-            TriggerServerEvent('ps-housing:server:openQBInv', {
-                stashId = stash,
-                stashData = stashConfig,
-                propertyId = propertyId
-            })
-        else
-            TriggerServerEvent("inventory:server:OpenInventory", "stash", stash, stashConfig)
-            TriggerEvent("inventory:client:SetCurrentStash", stash)
-        end
-    end,
-}
+function clientAdapter.AddEntrance(coords, size, heading, propertyId, enter, raid, showcase, showData, targetName)
+	local propertyIdString = tostring(propertyId)
 
-Framework.ox = {
-    Notify = function(message, type)
-        type = type == "inform" and "info" or type
-        
-        lib.notify({
-            title = 'Property',
-            description = message,
-            type = type
-        })
-    end,
+	return TD.Target.AddBoxZone({
+		name = targetName,
+		coords = vector3(coords.x, coords.y, coords.z),
+		size = vector3(size.x, size.y, size.z),
+		rotation = heading,
+		debug = Config.DebugMode,
+		options = {
+			{
+				name = ("td_housing_enter_%s"):format(propertyIdString),
+				label = "Enter Property",
+				icon = "fas fa-door-open",
+				on_select = enter,
+				can_interact = function()
+					return propertyHasAccess(propertyIdString)
+				end,
+			},
+			{
+				name = ("td_housing_showcase_%s"):format(propertyIdString),
+				label = "Showcase Property",
+				icon = "fas fa-eye",
+				on_select = showcase,
+				can_interact = function()
+					return isAllowedJob(RealtorJobs, nil, true)
+				end,
+			},
+			{
+				name = ("td_housing_info_%s"):format(propertyIdString),
+				label = "Property Info",
+				icon = "fas fa-circle-info",
+				on_select = showData,
+				can_interact = function()
+					return isAllowedJob(RealtorJobs, nil, true)
+				end,
+			},
+			{
+				name = ("td_housing_doorbell_%s"):format(propertyIdString),
+				label = "Ring Doorbell",
+				icon = "fas fa-bell",
+				on_select = enter,
+				can_interact = function()
+					return not propertyHasAccess(propertyIdString)
+				end,
+			},
+			{
+				name = ("td_housing_raid_%s"):format(propertyIdString),
+				label = "Raid Property",
+				icon = "fas fa-building-shield",
+				on_select = raid,
+				can_interact = function()
+					return isAllowedJob(PoliceJobs, Config.MinGradeToRaid, true)
+				end,
+			},
+		},
+	})
+end
 
-    AddEntrance = function (coords, size, heading, propertyId, enter, raid, showcase, showData, _)
-        local property_id = propertyId
+function clientAdapter.AddApartmentEntrance(coords, size, heading, apartment, enter, seeAll, seeAllToRaid, targetName)
+	return TD.Target.AddBoxZone({
+		name = targetName,
+		coords = vector3(coords.x, coords.y, coords.z),
+		size = vector3(size.x, size.y, size.z),
+		rotation = heading,
+		debug = Config.DebugMode,
+		options = {
+			{
+				name = ("td_housing_apartment_enter_%s"):format(apartment),
+				label = "Enter Apartment",
+				icon = "fas fa-door-open",
+				on_select = enter,
+				can_interact = function()
+					return apartmentHasOwnedUnit(apartment)
+				end,
+			},
+			{
+				name = ("td_housing_apartment_list_%s"):format(apartment),
+				label = "See all apartments",
+				icon = "fas fa-circle-info",
+				on_select = seeAll,
+			},
+			{
+				name = ("td_housing_apartment_raid_%s"):format(apartment),
+				label = "Raid Apartment",
+				icon = "fas fa-building-shield",
+				on_select = seeAllToRaid,
+				can_interact = function()
+					return isAllowedJob(PoliceJobs, Config.MinGradeToRaid, true)
+				end,
+			},
+		},
+	})
+end
 
-        local handler = exports.ox_target:addBoxZone({
-            coords = vector3(coords.x, coords.y, coords.z),
-            size = vector3(size.y, size.x, size.z),
-            rotation = heading,
-            debug = Config.DebugMode,
-            options = {
-                {
-                    label = "Enter Property",
-                    icon = "fas fa-door-open",
-                    onSelect = enter,
-                    canInteract = function()
-                        local property = Property.Get(property_id)
-                        return property.has_access or property.owner
-                    end,
-                },
-                {
-                    label = "Showcase Property",
-                    icon = "fas fa-eye",
-                    onSelect = showcase,
-                    canInteract = function()
-                        -- local property = Property.Get(property_id)
-                        -- if property.propertyData.owner ~= nil then return false end -- if its owned, it cannot be showcased
-                        
-                        local job = PlayerData.job
-                        local jobName = job.name
+function clientAdapter.AddDoorZoneInside(coords, size, heading, leave, checkDoor)
+	return TD.Target.AddBoxZone({
+		coords = vector3(coords.x, coords.y, coords.z),
+		size = vector3(size.x, size.y, size.z),
+		rotation = heading,
+		debug = Config.DebugMode,
+		options = {
+			{
+				name = "td_housing_leave_property",
+				label = "Leave Property",
+				icon = "fas fa-right-from-bracket",
+				on_select = leave,
+			},
+			{
+				name = "td_housing_check_door",
+				label = "Check Door",
+				icon = "fas fa-bell",
+				on_select = checkDoor,
+			},
+		},
+	})
+end
 
-                        return RealtorJobs[jobName]
-                    end,
-                },
-                {
-                    label = "Property Info",
-                    icon = "fas fa-circle-info",
-                    onSelect = showData,
-                    canInteract = function()
-                        local job = PlayerData.job
-                        local jobName = job.name
-                        local onDuty = job.onduty
-                        return RealtorJobs[jobName] and onDuty
-                    end,
-                },
-                {
-                    label = "Ring Doorbell",
-                    icon = "fas fa-bell",
-                    onSelect = enter,
-                    canInteract = function()
-                        local property = Property.Get(property_id)
-                        return not property.has_access and not property.owner
-                    end,
-                },
-                {
-                    label = "Raid Property",
-                    icon = "fas fa-building-shield",
-                    onSelect = raid,
-                    canInteract = function()
-                        local job = PlayerData.job
-                        local jobName = job.name
-                        local gradeAllowed = tonumber(job.grade.level) >= Config.MinGradeToRaid
-                        local onDuty = job.onduty
+function clientAdapter.AddDoorZoneInsideTempShell(coords, size, heading, leave)
+	return TD.Target.AddBoxZone({
+		coords = vector3(coords.x, coords.y, coords.z),
+		size = vector3(size.x, size.y, size.z),
+		rotation = heading,
+		debug = Config.DebugMode,
+		options = {
+			{
+				name = "td_housing_leave_temp_property",
+				label = "Leave",
+				icon = "fas fa-right-from-bracket",
+				on_select = leave,
+			},
+		},
+	})
+end
 
-                        return PoliceJobs[jobName] and onDuty and gradeAllowed
-                    end,
-                },
-            },
-        })
+function clientAdapter.RemoveTargetZone(targetId)
+	if targetId == nil then
+		return true
+	end
 
-        return handler
-    end,
+	return TD.Target.RemoveZone(targetId)
+end
 
-    AddApartmentEntrance = function (coords, size, heading, apartment, enter, seeAll, seeAllToRaid, _)        
-        local handler = exports.ox_target:addBoxZone({
-            coords = vector3(coords.x, coords.y, coords.z),
-            size = vector3(size.y, size.x, size.z),
-            rotation = heading,
-            debug = Config.DebugMode,
-            options = {
-                {
-                    label = "Enter Apartment",
-                    onSelect = enter,
-                    icon = "fas fa-door-open",
-                    canInteract = function()
-                        local apartments = ApartmentsTable[apartment].apartments
-                        return hasApartment(apartments)
-                    end,
-                },
-                {
-                    label = "See all apartments",
-                    onSelect = seeAll,
-                    icon = "fas fa-circle-info",
-                },
-                {
-                    label = "Raid Apartment",
-                    onSelect = seeAllToRaid,
-                    icon = "fas fa-building-shield",
-                    canInteract = function()
-                        local job = PlayerData.job
-                        local jobName = job.name
-                        local gradeAllowed = tonumber(job.grade.level) >= Config.MinGradeToRaid
-                        local onDuty = job.onduty
+function clientAdapter.AddRadialOption(id, label, icon, action, eventName, args)
+	return TD.Radial.Add({
+		id = id,
+		label = label,
+		icon = icon,
+		action = action,
+		event = action and nil or eventName,
+		args = args,
+		should_close = true,
+	})
+end
 
-                        return PoliceJobs[jobName] and onDuty and gradeAllowed
-                    end,
-                },
-            },
-        })
+function clientAdapter.RemoveRadialOption(id)
+	return TD.Radial.Remove(id)
+end
 
-        return handler
-    end,
+function clientAdapter.AddTargetEntity(entity, label, icon, action)
+	local name = ("td_housing_entity_%s_%s"):format(tostring(entity), tostring(label):gsub("%s+", "_"))
+	local key = tostring(entity)
 
-    AddDoorZoneInside = function (coords, size, heading, leave, checkDoor)
-        local handler = exports.ox_target:addBoxZone({
-            coords = vector3(coords.x, coords.y, coords.z), --z = 3.0
-            size = vector3(size.y, size.x, size.z),
-            rotation = heading,
-            debug = Config.DebugMode,
-            options = {
-                {
-                    name = "leave",
-                    label = "Leave Property",
-                    onSelect = leave,
-                    icon = "fas fa-right-from-bracket",
-                },
-                {
-                    name = "doorbell",
-                    label = "Check Door",
-                    onSelect = checkDoor,
-                    icon = "fas fa-bell",
-                },
-            },
-        })
+	entityTargetNames[key] = entityTargetNames[key] or {}
+	entityTargetNames[key][#entityTargetNames[key] + 1] = name
 
-        return handler
-    end,
+	return TD.Target.AddLocalEntity(entity, {
+		{
+			name = name,
+			label = label,
+			icon = icon,
+			on_select = action,
+		},
+	}, 2.0)
+end
 
-    AddDoorZoneInsideTempShell = function (coords, size, heading, leave)
-        local handler = exports.ox_target:addBoxZone({
-            coords = vector3(coords.x, coords.y, coords.z), --z = 3.0
-            size = vector3(size.y, size.x, size.z),
-            rotation = heading,
-            debug = Config.DebugMode,
-            options = {
-                {
-                    name = "leave",
-                    label = "Leave",
-                    onSelect = leave,
-                    icon = "fas fa-right-from-bracket",
-                },
-            },
-        })
-        print("made")
-        return handler
-    end,
+function clientAdapter.RemoveTargetEntity(entity)
+	local key = tostring(entity)
+	local names = entityTargetNames[key]
 
-    RemoveTargetZone = function (handler)
-        exports.ox_target:removeZone(handler)
-    end,
+	entityTargetNames[key] = nil
 
-    AddRadialOption = function(id, label, icon, fn)
-        lib.addRadialItem({
-            id = id,
-            icon = icon,
-            label = label,
-            onSelect = fn,
-        })
-    end,
+	return TD.Target.RemoveLocalEntity(entity, names)
+end
 
-    RemoveRadialOption = function(id)
-        lib.removeRadialItem(id)
-    end,
+function clientAdapter.inventoryHasItems()
+	return false
+end
 
-    AddTargetEntity = function (entity, label, icon, action)
-        exports.ox_target:addLocalEntity(entity, {
-            {
-                name = label,
-                label = label,
-                icon = icon,
-                onSelect = action,
-            },
-        })
-    end,
-    inventoryHasItems = function(name)
-        return lib.callback.await('ps-housing:cb:inventoryHasItems', 10, name, true)
-    end,
-    RemoveTargetEntity = function (entity)
-        exports.ox_target:removeLocalEntity(entity)
-    end,
+function clientAdapter.OpenInventory(stashId, stashConfig)
+	return TD.Inventory.Open("stash", stashId, {
+		id = stashId,
+		label = stashConfig and stashConfig.label,
+		slots = stashConfig and stashConfig.slots,
+		max_weight = stashConfig and (stashConfig.maxWeight or stashConfig.maxweight),
+	})
+end
 
-    OpenInventory = function (stash, stashConfig)
-        exports.ox_inventory:openInventory('stash', stash)
-    end,
-}
+Framework.td = clientAdapter
+Framework.qb = clientAdapter
+Framework.ox = clientAdapter

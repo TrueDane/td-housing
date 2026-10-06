@@ -3,7 +3,7 @@ game("gta5")
 
 author("TrueDane Development")
 description("TrueDane 3.0 housing engine based on ps-housing")
-version("0.1.0-dev")
+version("0.1.0")
 repository("https://github.com/TrueDane/td-housing")
 td_repository("TrueDane/td-housing")
 
@@ -33,6 +33,7 @@ client_scripts({
 	"client/client.lua",
 	"client/modeler.lua",
 	"client/integrations/wardrobe.lua",
+	"client/integrations/qbx_properties.lua",
 	"client/modules/property_capabilities.lua",
 	"client/migrate.lua",
 })
@@ -40,12 +41,18 @@ client_scripts({
 server_scripts({
 	"@oxmysql/lib/MySQL.lua",
 	"server/legacy_registration_guard.lua",
+	"server/repositories/property_repository.lua",
+	"server/repositories/legacy_appearance_repository.lua",
+	"server/repositories/legacy_apartment_repository.lua",
+	"server/services/legacy_property_service.lua",
 	"server/sv_property.lua",
 	"server/legacy_registration_restore.lua",
-	"server/repositories/property_repository.lua",
 	"server/services/ownership_service.lua",
 	"server/services/property_capability_service.lua",
+	"server/services/property_mutation_service.lua",
 	"server/services/legacy_guard_service.lua",
+	"server/services/appearance_service.lua",
+	"server/services/legacy_apartment_migration_service.lua",
 	"server/modules/property_capabilities.lua",
 	"server/modules/public_api.lua",
 	"server/modules/legacy_compatibility.lua",
