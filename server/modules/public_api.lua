@@ -80,6 +80,11 @@ exports("GetOwnedProperties", function(identifier)
 	return PropertyRepository.GetOwnedByIdentifier(identifier)
 end)
 
+-- Server-only registry view with no owner identifiers or access details.
+exports("GetPropertyMapEntries", function()
+	return PropertyRepository.GetMapEntries()
+end)
+
 exports("UpdateShell", function(propertyId, shell)
 	return PropertyMutationService.UpdateShell(propertyId, shell)
 end)
