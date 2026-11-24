@@ -85,6 +85,11 @@ exports("GetPropertyMapEntries", function()
 	return PropertyRepository.GetMapEntries()
 end)
 
+-- Server-only owner registry for authorized product integrations.
+exports("GetPropertyOwnerEntries", function()
+	return PropertyRepository.GetOwnerRegistryEntries()
+end)
+
 exports("UpdateShell", function(propertyId, shell)
 	return PropertyMutationService.UpdateShell(propertyId, shell)
 end)

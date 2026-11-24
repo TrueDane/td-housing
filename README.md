@@ -66,6 +66,7 @@ exports['td_housing']:RegisterProperty(propertyData, preventEnter, playerSource)
 exports['td_housing']:GetProperty(propertyId)
 exports['td_housing']:GetOwnedProperties(identifier)
 exports['td_housing']:GetPropertyMapEntries()
+exports['td_housing']:GetPropertyOwnerEntries()
 
 exports['td_housing']:SetOwner(propertyId, identifier)
 exports['td_housing']:UpdateShell(propertyId, shell)

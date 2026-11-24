@@ -98,6 +98,17 @@ function PropertyRepository.GetCapabilities(propertyId)
 	)
 end
 
+-- Only trusted server resources may consume the owner identifier registry.
+-- The public Realtor endpoint performs its own users-view permission check.
+function PropertyRepository.GetOwnerRegistryEntries()
+	return MySQL.query.await([[
+        SELECT property_id, owner_citizenid, street, region, apartment
+        FROM properties
+        WHERE owner_citizenid IS NOT NULL AND owner_citizenid <> ''
+        ORDER BY owner_citizenid ASC, property_id ASC
+    ]]) or {}
+end
+
 function PropertyRepository.GetOwnedByIdentifier(identifier)
 	return MySQL.query.await(
 		[[

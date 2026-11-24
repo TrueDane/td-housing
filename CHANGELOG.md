@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — property owner registry
+
+- Added read-only server export `GetPropertyOwnerEntries()` with owned-property identifier, Housing ID and address.
+- The database query excludes unowned properties and avoids access lists or customer/financial details.
+- Only authorized calling products should expose this information to players; no migration needed.
+
 ## Unreleased — property map registry
 
 - Added the read-only server export `GetPropertyMapEntries()` for approved product integrations.
