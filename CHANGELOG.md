@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — property map registry
+
+- Added the read-only server export `GetPropertyMapEntries()` for approved product integrations.
+- Returns only property ID, address/region, apartment, map geometry and an owner-present flag; never exposes owner CID or access lists.
+- No database migration required.
+
+
 All notable TD-Housing TrueDane 3.0 migration changes are documented here.
 
 ## 0.1.0 - 2026-10-06

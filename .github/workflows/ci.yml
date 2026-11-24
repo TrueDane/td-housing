@@ -51,6 +51,7 @@ jobs:
             tests/property_capabilities.lua
             tests/property_capability_service.lua
             tests/property_mutation_service.lua
+            tests/property_map_registry.lua
 
       - name: Install Lua 5.4
         run: |
@@ -89,6 +90,7 @@ jobs:
           luac5.4 -p tests/property_capabilities.lua
           luac5.4 -p tests/property_capability_service.lua
           luac5.4 -p tests/property_mutation_service.lua
+          luac5.4 -p tests/property_map_registry.lua
 
       - name: Check migrated runtime boundaries
         run: |
@@ -122,6 +124,9 @@ jobs:
 
       - name: Run property mutation tests
         run: lua5.4 tests/property_mutation_service.lua
+
+      - name: Run property map registry tests
+        run: lua5.4 tests/property_map_registry.lua
 
   nui:
     runs-on: ubuntu-latest

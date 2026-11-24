@@ -15,6 +15,20 @@ function PropertyRepository.GetAll()
 	return MySQL.query.await("SELECT * FROM properties") or {}
 end
 
+-- A location-only snapshot for authorized server-side product integrations.
+-- Never include owner citizen IDs, access lists or private housing metadata.
+function PropertyRepository.GetMapEntries()
+	return MySQL.query.await([[
+        SELECT property_id, street, region, apartment, door_data, zone_data,
+            CASE
+                WHEN owner_citizenid IS NULL OR owner_citizenid = '' THEN 0
+                ELSE 1
+            END AS is_owned
+        FROM properties
+        ORDER BY property_id ASC
+    ]]) or {}
+end
+
 function PropertyRepository.Create(data)
 	return MySQL.insert.await(
 		[[
